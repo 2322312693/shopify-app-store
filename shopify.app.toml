@@ -1,0 +1,27 @@
+name = "Product Image Cleaner AI"
+client_id = ""
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = ""
+include_config_on_deploy = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_files,write_files"
+
+[auth]
+redirect_urls = [
+  "https://example.com/auth/callback",
+  "https://example.com/auth/shopify/callback",
+  "https://example.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2025-10"
+
+[app_proxy]
+url = "https://example.com"
+subpath = "product-image-cleaner-ai"
+prefix = "apps"

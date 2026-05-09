@@ -1,0 +1,42 @@
+html,
+body {
+  min-height: 100%;
+}
+
+.imageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+}
+
+.imageChoice {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  background: #f6f6f7;
+}
+
+.imageChoiceSelected {
+  border-color: #005bd3;
+}
+
+.imageChoice img,
+.previewImage {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.beforeAfter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .beforeAfter {
+    grid-template-columns: 1fr;
+  }
+}
