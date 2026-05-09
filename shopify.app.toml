@@ -1,15 +1,13 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "1a98f9d8ea78c914a55f18e352c6c386"
 name = "Product Image Cleaner AI"
-client_id = ""
 application_url = "https://example.com"
 embedded = true
 
-[build]
-automatically_update_urls_on_dev = true
-dev_store_url = ""
-include_config_on_deploy = true
-
 [access_scopes]
-scopes = "read_products,write_products,read_files,write_files"
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_files,read_products,write_files,write_products"
 
 [auth]
 redirect_urls = [
@@ -19,9 +17,8 @@ redirect_urls = [
 ]
 
 [webhooks]
-api_version = "2025-10"
+api_version = "2026-07"
 
-[app_proxy]
-url = "https://example.com"
-subpath = "product-image-cleaner-ai"
-prefix = "apps"
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
