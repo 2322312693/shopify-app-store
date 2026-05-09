@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [remix()],
   server: {
     port: Number(process.env.PORT || 3000),
+    allowedHosts: [
+      ".trycloudflare.com",
+      ".myshopify.com",
+      "admin.shopify.com",
+      "localhost",
+    ],
     hmr: {
       protocol: "ws",
       host: "localhost",
