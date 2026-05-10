@@ -1,4 +1,4 @@
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import {
   Badge,
@@ -30,6 +30,7 @@ import {
 
 const isBillingTest = process.env.SHOPIFY_BILLING_TEST !== "false";
 const isBillingEnabled = process.env.SHOPIFY_BILLING_ENABLED === "true";
+const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
 
@@ -85,9 +86,12 @@ async function getCurrentSubscription({ billing, planName, billingCheck }) {
   return check.result?.appSubscriptions?.find((subscription) => subscription.name === planName) || null;
 }
 
-function getBillingReturnUrl(request) {
-  const url = new URL(request.url);
-  return `${url.origin}/app${url.search}`;
+function getStoreHandle(shop) {
+  return shop.replace(/\.myshopify\.com$/i, "");
+}
+
+function getManagedPricingUrl(shop) {
+  return `https://admin.shopify.com/store/${getStoreHandle(shop)}/charges/${managedPricingAppHandle}/pricing_plans`;
 }
 
 function getBillingErrorMessage(error) {
@@ -182,16 +186,7 @@ export const action = async ({ request }) => {
         return json({ ok: false, error: "Unknown plan." }, { status: 400 });
       }
 
-      try {
-        return await billing.request({
-          plan,
-          isTest: isBillingTest,
-          returnUrl: getBillingReturnUrl(request),
-        });
-      } catch (error) {
-        console.error("Billing request failed", error);
-        return json({ ok: false, error: getBillingErrorMessage(error) }, { status: 500 });
-      }
+      return redirect(getManagedPricingUrl(session.shop));
     }
 
     if (intent === "generate") {
@@ -359,7 +354,7 @@ export default function Index() {
                 {billingEnabled ? (
                   <BlockStack gap="200">
                     <Text as="p" tone="subdued">
-                      Charges are approved in Shopify and billed through your Shopify invoice.
+                      Plan changes are approved on Shopify's managed pricing page and billed through your Shopify invoice.
                     </Text>
                     <InlineStack gap="200">
                       {plans.map((plan) => (
