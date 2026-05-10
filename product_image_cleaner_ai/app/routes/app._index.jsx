@@ -30,32 +30,59 @@ import {
 
 const isBillingTest = process.env.SHOPIFY_BILLING_TEST !== "false";
 const isBillingEnabled = process.env.SHOPIFY_BILLING_ENABLED === "true";
+const BILLING_UNAVAILABLE_MESSAGE =
+  "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
 
-async function getCurrentPlan({ billing }) {
+function isBillingForbidden(error) {
+  const message = [
+    error?.message,
+    error?.response?.message,
+    error?.response?.statusText,
+    error?.networkStatusCode,
+  ].filter(Boolean).join(" ");
+  return message.includes("403") || message.includes("Forbidden");
+}
+
+async function checkBillingSafely({ billing }) {
+  try {
+    return {
+      ok: true,
+      warning: null,
+      result: await billing.check({
+        plans: BILLING_PLANS,
+        isTest: isBillingTest,
+      }),
+    };
+  } catch (error) {
+    console.error("Billing check failed", error);
+    if (isBillingForbidden(error)) {
+      return { ok: false, warning: BILLING_UNAVAILABLE_MESSAGE, result: null };
+    }
+    throw error;
+  }
+}
+
+async function getCurrentPlan({ billing, billingCheck }) {
   if (!isBillingEnabled) {
     const devPlan = process.env.SHOPIFY_DEV_PLAN || "Free";
     return BILLING_PLANS.includes(devPlan) ? devPlan : "Free";
   }
 
-  const billingCheck = await billing.check({
-    plans: BILLING_PLANS,
-    isTest: isBillingTest,
-  });
+  const check = billingCheck || await checkBillingSafely({ billing });
+  if (!check.ok) return "Free";
 
-  const activePlan = billingCheck.appSubscriptions?.find((subscription) =>
+  const activePlan = check.result?.appSubscriptions?.find((subscription) =>
     BILLING_PLANS.includes(subscription.name),
   );
 
   return activePlan?.name || "Free";
 }
 
-async function getCurrentSubscription({ billing, planName }) {
+async function getCurrentSubscription({ billing, planName, billingCheck }) {
   if (!isBillingEnabled || planName === "Free") return null;
-  const billingCheck = await billing.check({
-    plans: BILLING_PLANS,
-    isTest: isBillingTest,
-  });
-  return billingCheck.appSubscriptions?.find((subscription) => subscription.name === planName) || null;
+  const check = billingCheck || await checkBillingSafely({ billing });
+  if (!check.ok) return null;
+  return check.result?.appSubscriptions?.find((subscription) => subscription.name === planName) || null;
 }
 
 function getBillingReturnUrl(request) {
@@ -71,11 +98,15 @@ function getBillingErrorMessage(error) {
       if (serialized.includes("Apps without a public distribution cannot use the Billing API")) {
         return "This app cannot use Shopify Billing API until distribution is set to Public in Shopify Dev Dashboard.";
       }
+      if (serialized.includes("Forbidden")) {
+        return BILLING_UNAVAILABLE_MESSAGE;
+      }
       return `${error.message}: ${serialized}`;
     } catch {
       return error.message;
     }
   }
+  if (isBillingForbidden(error)) return BILLING_UNAVAILABLE_MESSAGE;
   return error.message || "Error while billing the store";
 }
 
@@ -95,9 +126,11 @@ function fallbackUsage(planName) {
 export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
 
-  const planName = await getCurrentPlan({ billing });
-  const activeSubscription = await getCurrentSubscription({ billing, planName });
   let usageWarning = null;
+  const billingCheck = isBillingEnabled ? await checkBillingSafely({ billing }) : null;
+  const planName = await getCurrentPlan({ billing, billingCheck });
+  const activeSubscription = await getCurrentSubscription({ billing, planName, billingCheck });
+  const billingWarning = billingCheck?.warning || null;
   let usage = fallbackUsage(planName);
 
   try {
@@ -119,6 +152,7 @@ export const loader = async ({ request }) => {
   return json({
     products,
     billingEnabled: isBillingEnabled,
+    billingWarning,
     usage,
     usageWarning,
     plans: Object.entries(PLAN_LIMITS)
@@ -169,7 +203,8 @@ export const action = async ({ request }) => {
         return json({ ok: false, error: "Select a product image first." }, { status: 400 });
       }
 
-      const planName = await getCurrentPlan({ billing });
+      const billingCheck = isBillingEnabled ? await checkBillingSafely({ billing }) : null;
+      const planName = await getCurrentPlan({ billing, billingCheck });
       const reservation = await reserveGeneration(session.shop, planName, {
         productId,
         sourceImageUrl,
@@ -238,7 +273,7 @@ export const action = async ({ request }) => {
 };
 
 export default function Index() {
-  const { products, cleanupModes, billingEnabled, usage: initialUsage, usageWarning, plans } = useLoaderData();
+  const { products, cleanupModes, billingEnabled, billingWarning, usage: initialUsage, usageWarning, plans } = useLoaderData();
   const actionData = useActionData();
   const navigation = useNavigation();
   const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || "");
@@ -300,6 +335,10 @@ export default function Index() {
 
             {usageWarning ? (
               <Banner tone="warning">{usageWarning}</Banner>
+            ) : null}
+
+            {billingWarning ? (
+              <Banner tone="warning">{billingWarning}</Banner>
             ) : null}
 
             <Card>
