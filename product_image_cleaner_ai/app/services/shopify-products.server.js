@@ -1,6 +1,6 @@
 const PRODUCTS_QUERY = `#graphql
-  query ProductImages($first: Int!, $query: String) {
-    products(first: $first, query: $query, sortKey: UPDATED_AT, reverse: true) {
+  query ProductImages($first: Int!) {
+    products(first: $first, sortKey: UPDATED_AT, reverse: true) {
       nodes {
         id
         title
@@ -29,70 +29,12 @@ const SHOP_DIAGNOSTICS_QUERY = `#graphql
   query ShopProductDiagnostics {
     shop {
       name
-      productImagesCount {
-        count
-      }
     }
-    active: products(first: 5, query: "status:active", sortKey: UPDATED_AT, reverse: true) {
+    products(first: 10, sortKey: UPDATED_AT, reverse: true) {
       nodes {
         id
         title
         status
-        totalVariants
-        mediaCount {
-          count
-        }
-        media(first: 3) {
-          nodes {
-            id
-            mediaContentType
-            preview {
-              image {
-                url
-              }
-            }
-            ... on MediaImage {
-              image {
-                url
-              }
-            }
-          }
-        }
-      }
-    }
-    draft: products(first: 5, query: "status:draft", sortKey: UPDATED_AT, reverse: true) {
-      nodes {
-        id
-        title
-        status
-        totalVariants
-        mediaCount {
-          count
-        }
-        media(first: 3) {
-          nodes {
-            id
-            mediaContentType
-            preview {
-              image {
-                url
-              }
-            }
-            ... on MediaImage {
-              image {
-                url
-              }
-            }
-          }
-        }
-      }
-    }
-    archived: products(first: 5, query: "status:archived", sortKey: UPDATED_AT, reverse: true) {
-      nodes {
-        id
-        title
-        status
-        totalVariants
         mediaCount {
           count
         }
@@ -135,12 +77,12 @@ const PRODUCT_CREATE_MEDIA_MUTATION = `#graphql
 
 export async function getRecentProductsWithImages(admin, first = 20) {
   const response = await admin.graphql(PRODUCTS_QUERY, {
-    variables: { first, query: "status:active,draft,archived" },
+    variables: { first },
   });
   const json = await response.json();
 
   if (json.errors) {
-    throw new Error(JSON.stringify(json.errors));
+    throw new Error(formatGraphQLErrors(json.errors));
   }
 
   const products = (json.data?.products?.nodes || []).map((product) => ({
@@ -161,6 +103,13 @@ export async function getRecentProductsWithImages(admin, first = 20) {
   );
 
   return products;
+}
+
+function formatGraphQLErrors(errors = []) {
+  return errors.map((error) => {
+    if (typeof error === "string") return error;
+    return error.message || JSON.stringify(error);
+  }).join("; ");
 }
 
 function compactDiagnosticProducts(products = []) {
@@ -185,22 +134,20 @@ export async function getShopProductDiagnostics(admin) {
 
     return {
       ok: !json.errors,
-      errors: json.errors || null,
+      errors: json.errors ? json.errors.map((error) => ({
+        message: error.message || JSON.stringify(error),
+        path: error.path || null,
+        extensions: error.extensions || null,
+      })) : null,
       shopName: json.data?.shop?.name || null,
-      productImagesCount: json.data?.shop?.productImagesCount?.count ?? null,
-      active: compactDiagnosticProducts(json.data?.active?.nodes),
-      draft: compactDiagnosticProducts(json.data?.draft?.nodes),
-      archived: compactDiagnosticProducts(json.data?.archived?.nodes),
+      products: compactDiagnosticProducts(json.data?.products?.nodes),
     };
   } catch (error) {
     return {
       ok: false,
       errors: [{ message: error.message }],
       shopName: null,
-      productImagesCount: null,
-      active: [],
-      draft: [],
-      archived: [],
+      products: [],
     };
   }
 }
