@@ -4,16 +4,19 @@ import { login } from "../shopify.server";
 
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
-  if (url.searchParams.get("shop")) {
+  const shop = url.searchParams.get("shop");
+  if (shop && /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shop.trim())) {
     return login(request);
   }
 
-  const errors = await login(request);
-  return json({ errors });
+  return json({
+    error: shop ? "Enter a valid myshopify.com store domain." : null,
+    shop: shop || "",
+  });
 };
 
 export default function Login() {
-  const { errors } = useLoaderData();
+  const { error, shop } = useLoaderData();
 
   return (
     <main style={{ fontFamily: "Inter, system-ui, sans-serif", margin: "64px auto", maxWidth: 420, padding: 24 }}>
@@ -21,13 +24,14 @@ export default function Login() {
       <p style={{ color: "#5f6368", lineHeight: 1.5, marginBottom: 24 }}>
         Enter your Shopify store domain to install or open the app.
       </p>
-      <Form method="get">
+      <Form method="get" action="/auth/login">
         <label htmlFor="shop" style={{ display: "block", fontWeight: 600, marginBottom: 8 }}>
           Shopify store
         </label>
         <input
           id="shop"
           name="shop"
+          defaultValue={shop}
           placeholder="your-store.myshopify.com"
           style={{
             border: "1px solid #c9cccf",
@@ -39,8 +43,8 @@ export default function Login() {
             width: "100%",
           }}
         />
-        {errors?.shop ? (
-          <p style={{ color: "#b42318", marginTop: 0 }}>Enter a valid myshopify.com store domain.</p>
+        {error ? (
+          <p style={{ color: "#b42318", marginTop: 0 }}>{error}</p>
         ) : null}
         <button
           type="submit"
