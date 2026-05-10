@@ -5,9 +5,16 @@ name = "Product Image Cleaner AI"
 application_url = "https://example.com"
 embedded = true
 
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2026-07"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_files,read_products,write_files,write_products"
+scopes = "read_products,write_products"
 
 [auth]
 redirect_urls = [
@@ -15,10 +22,3 @@ redirect_urls = [
   "https://example.com/auth/shopify/callback",
   "https://example.com/api/auth/callback"
 ]
-
-[webhooks]
-api_version = "2026-07"
-
-[build]
-include_config_on_deploy = true
-automatically_update_urls_on_dev = true
