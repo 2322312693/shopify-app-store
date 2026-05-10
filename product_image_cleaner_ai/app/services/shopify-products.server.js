@@ -1,10 +1,11 @@
 const PRODUCTS_QUERY = `#graphql
-  query ProductImages($first: Int!) {
-    products(first: $first, sortKey: UPDATED_AT, reverse: true) {
+  query ProductImages($first: Int!, $query: String) {
+    products(first: $first, query: $query, sortKey: UPDATED_AT, reverse: true) {
       nodes {
         id
         title
         handle
+        status
         media(first: 12) {
           nodes {
             ... on MediaImage {
@@ -42,12 +43,12 @@ const PRODUCT_CREATE_MEDIA_MUTATION = `#graphql
 
 export async function getRecentProductsWithImages(admin, first = 20) {
   const response = await admin.graphql(PRODUCTS_QUERY, {
-    variables: { first },
+    variables: { first, query: "status:active,draft,archived" },
   });
   const json = await response.json();
 
   if (json.errors) {
-    throw new Error(json.errors.map((error) => error.message).join("; "));
+    throw new Error(JSON.stringify(json.errors));
   }
 
   const products = (json.data?.products?.nodes || []).map((product) => ({

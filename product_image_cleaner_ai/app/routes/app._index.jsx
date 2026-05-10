@@ -16,7 +16,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import { useMemo, useState } from "react";
-import { BILLING_PLANS, STARTER_PLAN, authenticate } from "../shopify.server";
+import { BILLING_PLANS, STARTER_PLAN, authenticate, sessionStorage } from "../shopify.server";
 import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner.server";
 import { addImageToProduct, getRecentProductsWithImages } from "../services/shopify-products.server";
 import {
@@ -33,6 +33,31 @@ const isBillingCheckEnabled = process.env.SHOPIFY_BILLING_CHECK_ENABLED === "tru
 const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
+
+function sessionScopes(session) {
+  return String(session.scope || "")
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
+async function requireProductScopes(request, session) {
+  const scopes = sessionScopes(session);
+  const hasProductRead = scopes.includes("read_products") || scopes.includes("write_products");
+  const hasProductWrite = scopes.includes("write_products");
+  const missingScopes = [
+    !hasProductRead ? "read_products" : null,
+    !hasProductWrite ? "write_products" : null,
+  ].filter(Boolean);
+
+  if (missingScopes.length === 0) return;
+
+  console.warn(`Shopify session for ${session.shop} is missing scopes: ${missingScopes.join(", ")}. Reauthorizing.`);
+  await sessionStorage.deleteSession(session.id);
+
+  const url = new URL(request.url);
+  throw redirect(`/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`);
+}
 
 function isBillingForbidden(error) {
   const message = [
@@ -130,6 +155,7 @@ function fallbackUsage(planName) {
 
 export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
+  await requireProductScopes(request, session);
 
   let usageWarning = null;
   const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
@@ -186,6 +212,7 @@ export const loader = async ({ request }) => {
 
 export const action = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
+  await requireProductScopes(request, session);
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");
 
