@@ -44,7 +44,7 @@ function sessionScopes(session) {
 
 function getMissingProductScopes(session) {
   const scopes = sessionScopes(session);
-  const hasProductRead = scopes.includes("read_products");
+  const hasProductRead = scopes.includes("read_products") || scopes.includes("write_products");
   const hasProductWrite = scopes.includes("write_products");
   return [
     !hasProductRead ? "read_products" : null,

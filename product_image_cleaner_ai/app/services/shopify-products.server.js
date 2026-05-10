@@ -1,11 +1,10 @@
 const PRODUCTS_QUERY = `#graphql
   query ProductImages($first: Int!) {
-    products(first: $first, sortKey: UPDATED_AT, reverse: true) {
+    products(first: $first) {
       nodes {
         id
         title
         handle
-        status
         media(first: 12) {
           nodes {
             ... on MediaImage {
@@ -27,21 +26,22 @@ const PRODUCTS_QUERY = `#graphql
 
 const SHOP_DIAGNOSTICS_QUERY = `#graphql
   query ShopProductDiagnostics {
+    currentAppInstallation {
+      accessScopes {
+        handle
+      }
+    }
     shop {
       name
     }
-    products(first: 10, sortKey: UPDATED_AT, reverse: true) {
+    products(first: 10) {
       nodes {
         id
         title
-        status
-        mediaCount {
-          count
-        }
+        handle
         media(first: 3) {
           nodes {
             id
-            mediaContentType
             preview {
               image {
                 url
@@ -116,15 +116,24 @@ function compactDiagnosticProducts(products = []) {
   return products.map((product) => ({
     id: product.id,
     title: product.title,
-    status: product.status,
-    totalVariants: product.totalVariants,
-    mediaCount: product.mediaCount?.count ?? null,
+    handle: product.handle,
     media: (product.media?.nodes || []).map((media) => ({
       id: media.id,
-      type: media.mediaContentType,
       imageUrl: media.image?.url || media.preview?.image?.url || null,
     })),
   }));
+}
+
+function serializeAdminError(error) {
+  return {
+    name: error.name || null,
+    message: error.message || String(error),
+    code: error.code || null,
+    responseCode: error.response?.code || null,
+    responseStatusText: error.response?.statusText || null,
+    responseBody: error.response?.body || null,
+    networkStatusCode: error.networkStatusCode || null,
+  };
 }
 
 export async function getShopProductDiagnostics(admin) {
@@ -139,13 +148,15 @@ export async function getShopProductDiagnostics(admin) {
         path: error.path || null,
         extensions: error.extensions || null,
       })) : null,
+      appAccessScopes: (json.data?.currentAppInstallation?.accessScopes || []).map((scope) => scope.handle),
       shopName: json.data?.shop?.name || null,
       products: compactDiagnosticProducts(json.data?.products?.nodes),
     };
   } catch (error) {
     return {
       ok: false,
-      errors: [{ message: error.message }],
+      errors: [serializeAdminError(error)],
+      appAccessScopes: null,
       shopName: null,
       products: [],
     };
