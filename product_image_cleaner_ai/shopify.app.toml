@@ -2,7 +2,7 @@
 
 client_id = "1a98f9d8ea78c914a55f18e352c6c386"
 name = "Product Image Cleaner AI"
-application_url = "https://shopify-app-store.onrender.com"
+application_url = "https://imagecleaner.zestgpt.com"
 embedded = true
 
 [build]
@@ -17,5 +17,5 @@ scopes = "read_products,write_products"
 
 [auth]
 redirect_urls = [
-  "https://shopify-app-store.onrender.com/auth/callback"
+  "https://imagecleaner.zestgpt.com/auth/callback"
 ]
