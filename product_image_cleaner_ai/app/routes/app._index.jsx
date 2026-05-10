@@ -186,7 +186,8 @@ export const loader = async ({ request }) => {
   } catch (error) {
     console.error(`Product image query failed for ${session.shop}`, error);
     productError = {
-      message: error.message,
+      name: error.name || null,
+      message: error.message || String(error),
       code: error.code || null,
     };
     productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";

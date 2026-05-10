@@ -76,9 +76,15 @@ const PRODUCT_CREATE_MEDIA_MUTATION = `#graphql
 `;
 
 export async function getRecentProductsWithImages(admin, first = 20) {
-  const response = await admin.graphql(PRODUCTS_QUERY, {
-    variables: { first },
-  });
+  let response;
+  try {
+    response = await admin.graphql(PRODUCTS_QUERY, {
+      variables: { first },
+    });
+  } catch (error) {
+    throw new Error(JSON.stringify(await serializeAdminError(error)));
+  }
+
   const json = await response.json();
 
   if (json.errors) {
@@ -124,7 +130,28 @@ function compactDiagnosticProducts(products = []) {
   }));
 }
 
-function serializeAdminError(error) {
+async function serializeResponse(response) {
+  const headers = {};
+  response.headers?.forEach?.((value, key) => {
+    headers[key] = value;
+  });
+
+  return {
+    type: "Response",
+    status: response.status,
+    statusText: response.statusText,
+    url: response.url || null,
+    redirected: response.redirected || false,
+    headers,
+    body: await response.clone().text().catch(() => null),
+  };
+}
+
+async function serializeAdminError(error) {
+  if (typeof Response !== "undefined" && error instanceof Response) {
+    return serializeResponse(error);
+  }
+
   return {
     name: error.name || null,
     message: error.message || String(error),
@@ -155,7 +182,7 @@ export async function getShopProductDiagnostics(admin) {
   } catch (error) {
     return {
       ok: false,
-      errors: [serializeAdminError(error)],
+      errors: [await serializeAdminError(error)],
       appAccessScopes: null,
       shopName: null,
       products: [],
