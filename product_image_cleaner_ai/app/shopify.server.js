@@ -7,11 +7,19 @@ import {
   shopifyApp,
 } from "@shopify/shopify-app-remix/server";
 import { SQLiteSessionStorage } from "@shopify/shopify-app-session-storage-sqlite";
+import fs from "node:fs";
+import path from "node:path";
 
 export const STARTER_PLAN = "Starter";
 export const PRO_PLAN = "Pro";
 export const BUSINESS_PLAN = "Business";
 export const BILLING_PLANS = [STARTER_PLAN, PRO_PLAN, BUSINESS_PLAN];
+
+const sessionDbPath = process.env.SHOPIFY_SESSION_DB_PATH || ".data/shopify_sessions.sqlite";
+const sessionDbDir = path.dirname(sessionDbPath);
+if (sessionDbDir && sessionDbDir !== ".") {
+  fs.mkdirSync(sessionDbDir, { recursive: true });
+}
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY || "",
@@ -20,7 +28,7 @@ const shopify = shopifyApp({
   scopes: (process.env.SCOPES || "read_products,write_products").split(","),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
-  sessionStorage: new SQLiteSessionStorage(process.env.SHOPIFY_SESSION_DB_PATH || ".data/shopify_sessions.sqlite"),
+  sessionStorage: new SQLiteSessionStorage(sessionDbPath),
   distribution: AppDistribution.AppStore,
   billing: {
     [STARTER_PLAN]: {
