@@ -151,6 +151,7 @@ export const loader = async ({ request }) => {
   const missingProductScopes = getMissingProductScopes(session);
   const url = new URL(request.url);
   const reauthorizeUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
+  const resetAuthUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&reset=1&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
   const hasAccessToken = Boolean(session.accessToken);
 
   let usageWarning = null;
@@ -212,6 +213,7 @@ export const loader = async ({ request }) => {
     scopes: sessionScopes(session),
     missingProductScopes,
     reauthorizeUrl,
+    resetAuthUrl,
     billingCheckEnabled: isBillingCheckEnabled,
     planName,
     usage,
@@ -248,6 +250,7 @@ export const loader = async ({ request }) => {
     diagnostics,
     missingProductScopes,
     reauthorizeUrl,
+    resetAuthUrl,
     plans: Object.entries(PLAN_LIMITS)
       .filter(([name]) => name !== "Free")
       .map(([name, plan]) => ({
@@ -386,6 +389,7 @@ export default function Index() {
     diagnostics,
     missingProductScopes,
     reauthorizeUrl,
+    resetAuthUrl,
     plans,
   } = useLoaderData();
   const actionData = useActionData();
@@ -481,6 +485,19 @@ export default function Index() {
                 }}
               >
                 Shopify access expired. Reauthorize the app to load product images.
+              </Banner>
+            ) : null}
+
+            {diagnostics?.productQuery?.productError ? (
+              <Banner
+                tone="critical"
+                action={{
+                  content: "Reset Shopify auth",
+                  url: resetAuthUrl,
+                  target: "_top",
+                }}
+              >
+                Shopify Admin API rejected the current session. Reset auth to create a fresh offline token.
               </Banner>
             ) : null}
 

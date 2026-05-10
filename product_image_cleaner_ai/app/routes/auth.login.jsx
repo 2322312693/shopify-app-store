@@ -1,11 +1,15 @@
 import { json } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
-import { login } from "../shopify.server";
+import { login, sessionStorage } from "../shopify.server";
 
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");
+  const reset = url.searchParams.get("reset");
   if (shop && /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shop.trim())) {
+    if (reset === "1") {
+      await sessionStorage.deleteSession(`offline_${shop.trim()}`);
+    }
     return login(request);
   }
 
