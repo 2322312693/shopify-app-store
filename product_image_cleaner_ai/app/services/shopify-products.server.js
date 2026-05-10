@@ -161,6 +161,58 @@ export async function getRecentProductsWithImagesFromRest({ shop, accessToken, f
   return products;
 }
 
+export async function migrateOfflineSessionToExpiring({ session, sessionStorage }) {
+  if (!session?.shop || !session?.accessToken) {
+    throw new Error("Missing offline session for token migration.");
+  }
+
+  const body = new URLSearchParams({
+    client_id: process.env.SHOPIFY_API_KEY || "",
+    client_secret: process.env.SHOPIFY_API_SECRET || "",
+    grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+    subject_token: session.accessToken,
+    subject_token_type: "urn:shopify:params:oauth:token-type:offline-access-token",
+    requested_token_type: "urn:shopify:params:oauth:token-type:offline-access-token",
+    expiring: "1",
+  });
+
+  const response = await fetch(`https://${session.shop}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  const data = await response.json().catch(async () => ({
+    raw: await response.text().catch(() => null),
+  }));
+
+  if (!response.ok) {
+    throw new Error(JSON.stringify({
+      type: "TOKEN_MIGRATION_ERROR",
+      status: response.status,
+      statusText: response.statusText,
+      body: data,
+    }));
+  }
+
+  session.accessToken = data.access_token;
+  session.scope = data.scope || session.scope;
+  if (data.expires_in) {
+    session.expires = new Date(Date.now() + data.expires_in * 1000);
+  }
+
+  await sessionStorage.storeSession(session);
+
+  return {
+    accessToken: data.access_token,
+    scope: data.scope || session.scope,
+    expiresIn: data.expires_in || null,
+    refreshTokenReceived: Boolean(data.refresh_token),
+  };
+}
+
 function formatGraphQLErrors(errors = []) {
   return errors.map((error) => {
     if (typeof error === "string") return error;

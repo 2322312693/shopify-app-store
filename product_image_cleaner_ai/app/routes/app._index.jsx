@@ -23,6 +23,7 @@ import {
   getRecentProductsWithImages,
   getRecentProductsWithImagesFromRest,
   getShopProductDiagnostics,
+  migrateOfflineSessionToExpiring,
 } from "../services/shopify-products.server";
 import {
   completeReservation,
@@ -169,6 +170,7 @@ export const loader = async ({ request }) => {
   let productWarning = null;
   let productError = null;
   let productSource = null;
+  let tokenMigration = null;
   let products = [];
 
   if (!hasAccessToken) {
@@ -223,7 +225,28 @@ export const loader = async ({ request }) => {
         message: restError.message || String(restError),
         code: restError.code || null,
       };
-      productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
+
+      if (String(restError.message || "").includes("Non-expiring access tokens are no longer accepted")) {
+        try {
+          tokenMigration = await migrateOfflineSessionToExpiring({ session, sessionStorage });
+          products = await getRecentProductsWithImagesFromRest({
+            shop: session.shop,
+            accessToken: tokenMigration.accessToken,
+          });
+          productSource = "rest-expiring-token";
+          productWarning = null;
+        } catch (migrationError) {
+          console.error(`Offline token migration failed for ${session.shop}`, migrationError);
+          productError.tokenMigration = {
+            name: migrationError.name || null,
+            message: migrationError.message || String(migrationError),
+            code: migrationError.code || null,
+          };
+          productWarning = "Product images could not be loaded because Shopify token migration failed.";
+        }
+      } else {
+        productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
+      }
     }
   }
 
@@ -241,6 +264,7 @@ export const loader = async ({ request }) => {
     planName,
     usage,
     usageError,
+    tokenMigration,
     productQuery: {
       returnedProducts: products.length,
       returnedImages: productImageCount,
