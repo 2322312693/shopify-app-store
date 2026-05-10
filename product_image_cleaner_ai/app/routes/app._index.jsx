@@ -29,7 +29,7 @@ import {
 } from "../services/usage.server";
 
 const isBillingTest = process.env.SHOPIFY_BILLING_TEST !== "false";
-const isBillingEnabled = process.env.SHOPIFY_BILLING_ENABLED === "true";
+const isBillingCheckEnabled = process.env.SHOPIFY_BILLING_CHECK_ENABLED === "true";
 const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
@@ -55,16 +55,17 @@ async function checkBillingSafely({ billing }) {
       }),
     };
   } catch (error) {
-    console.error("Billing check failed", error);
     if (isBillingForbidden(error)) {
+      console.warn("Billing check forbidden; using backend/free quota state instead.");
       return { ok: false, warning: BILLING_UNAVAILABLE_MESSAGE, result: null };
     }
+    console.error("Billing check failed", error);
     throw error;
   }
 }
 
 async function getCurrentPlan({ billing, billingCheck }) {
-  if (!isBillingEnabled) {
+  if (!isBillingCheckEnabled) {
     const devPlan = process.env.SHOPIFY_DEV_PLAN || "Free";
     return BILLING_PLANS.includes(devPlan) ? devPlan : "Free";
   }
@@ -80,7 +81,7 @@ async function getCurrentPlan({ billing, billingCheck }) {
 }
 
 async function getCurrentSubscription({ billing, planName, billingCheck }) {
-  if (!isBillingEnabled || planName === "Free") return null;
+  if (!isBillingCheckEnabled || planName === "Free") return null;
   const check = billingCheck || await checkBillingSafely({ billing });
   if (!check.ok) return null;
   return check.result?.appSubscriptions?.find((subscription) => subscription.name === planName) || null;
@@ -131,14 +132,16 @@ export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
 
   let usageWarning = null;
-  const billingCheck = isBillingEnabled ? await checkBillingSafely({ billing }) : null;
+  const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
   const planName = await getCurrentPlan({ billing, billingCheck });
   const activeSubscription = await getCurrentSubscription({ billing, planName, billingCheck });
   const billingWarning = billingCheck?.warning || null;
   let usage = fallbackUsage(planName);
+  let productWarning = null;
+  let products = [];
 
   try {
-    if (isBillingEnabled) {
+    if (isBillingCheckEnabled) {
       await syncSubscriptionToBackend(session.shop, planName, {
         status: planName === "Free" ? "none" : "active",
         currentPeriodEnd: activeSubscription?.currentPeriodEnd,
@@ -151,14 +154,21 @@ export const loader = async ({ request }) => {
     usageWarning = "Usage service is temporarily unavailable. Generation still requires the usage service before it can run.";
   }
 
-  const products = await getRecentProductsWithImages(admin);
+  try {
+    products = await getRecentProductsWithImages(admin);
+  } catch (error) {
+    console.error("Product image query failed", error);
+    productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this dev store.";
+  }
 
   return json({
     products,
-    billingEnabled: isBillingEnabled,
+    billingCheckEnabled: isBillingCheckEnabled,
     billingWarning,
+    managedPricingUrl: getManagedPricingUrl(session.shop),
     usage,
     usageWarning,
+    productWarning,
     plans: Object.entries(PLAN_LIMITS)
       .filter(([name]) => name !== "Free")
       .map(([name, plan]) => ({
@@ -198,7 +208,7 @@ export const action = async ({ request }) => {
         return json({ ok: false, error: "Select a product image first." }, { status: 400 });
       }
 
-      const billingCheck = isBillingEnabled ? await checkBillingSafely({ billing }) : null;
+      const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
       const planName = await getCurrentPlan({ billing, billingCheck });
       const reservation = await reserveGeneration(session.shop, planName, {
         productId,
@@ -268,7 +278,17 @@ export const action = async ({ request }) => {
 };
 
 export default function Index() {
-  const { products, cleanupModes, billingEnabled, billingWarning, usage: initialUsage, usageWarning, plans } = useLoaderData();
+  const {
+    products,
+    cleanupModes,
+    billingCheckEnabled,
+    billingWarning,
+    managedPricingUrl,
+    usage: initialUsage,
+    usageWarning,
+    productWarning,
+    plans,
+  } = useLoaderData();
   const actionData = useActionData();
   const navigation = useNavigation();
   const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || "");
@@ -289,7 +309,6 @@ export default function Index() {
   const isGenerating =
     isSubmitting && navigation.formData?.get("intent") === "generate";
   const isAdding = isSubmitting && navigation.formData?.get("intent") === "add";
-  const isSubscribing = isSubmitting && navigation.formData?.get("intent") === "subscribe";
   const generated = actionData?.ok && actionData.intent === "generate" ? actionData : null;
   const usage = actionData?.usage || initialUsage;
 
@@ -322,9 +341,9 @@ export default function Index() {
               Use this tool only for product images you own or are authorized to edit. Generated images are added as new product media and original images are not replaced.
             </Banner>
 
-            {!billingEnabled ? (
+            {!billingCheckEnabled ? (
               <Banner tone="warning">
-                Billing is disabled for local development. Set SHOPIFY_BILLING_ENABLED=true when you are ready to test the monthly subscription flow.
+                Shopify subscription status checks are disabled for local development. Plan buttons still open Shopify Managed Pricing.
               </Banner>
             ) : null}
 
@@ -334,6 +353,10 @@ export default function Index() {
 
             {billingWarning ? (
               <Banner tone="warning">{billingWarning}</Banner>
+            ) : null}
+
+            {productWarning ? (
+              <Banner tone="critical">{productWarning}</Banner>
             ) : null}
 
             <Card>
@@ -351,26 +374,25 @@ export default function Index() {
                     {usage.used} / {usage.limit} used
                   </Badge>
                 </InlineStack>
-                {billingEnabled ? (
-                  <BlockStack gap="200">
-                    <Text as="p" tone="subdued">
-                      Plan changes are approved on Shopify's managed pricing page and billed through your Shopify invoice.
-                    </Text>
-                    <InlineStack gap="200">
-                      {plans.map((plan) => (
-                        <Form method="post" key={plan.name}>
-                          <input type="hidden" name="intent" value="subscribe" />
-                          <input type="hidden" name="plan" value={plan.name} />
-                          <Button submit loading={isSubscribing} disabled={usage.planName === plan.name}>
-                            {usage.planName === plan.name
-                              ? `${plan.name} active`
-                              : `${plan.name} - ${plan.price} ${plan.interval} - ${plan.limit} images`}
-                          </Button>
-                        </Form>
-                      ))}
-                    </InlineStack>
-                  </BlockStack>
-                ) : null}
+                <BlockStack gap="200">
+                  <Text as="p" tone="subdued">
+                    Plan changes are approved on Shopify's managed pricing page and billed through your Shopify invoice.
+                  </Text>
+                  <InlineStack gap="200">
+                    {plans.map((plan) => (
+                      <Button
+                        key={plan.name}
+                        url={managedPricingUrl}
+                        target="_top"
+                        disabled={usage.planName === plan.name}
+                      >
+                        {usage.planName === plan.name
+                          ? `${plan.name} active`
+                          : `${plan.name} - ${plan.price} ${plan.interval} - ${plan.limit} images`}
+                      </Button>
+                    ))}
+                  </InlineStack>
+                </BlockStack>
               </BlockStack>
             </Card>
 

@@ -5,6 +5,22 @@ const PRODUCTS_QUERY = `#graphql
         id
         title
         handle
+        featuredImage {
+          id
+          altText
+          url
+          width
+          height
+        }
+        images(first: 12) {
+          nodes {
+            id
+            altText
+            url
+            width
+            height
+          }
+        }
         media(first: 12) {
           nodes {
             ... on MediaImage {
@@ -50,9 +66,8 @@ export async function getRecentProductsWithImages(admin, first = 20) {
     throw new Error(json.errors.map((error) => error.message).join("; "));
   }
 
-  return (json.data?.products?.nodes || []).map((product) => ({
-    ...product,
-    images: (product.media?.nodes || [])
+  return (json.data?.products?.nodes || []).map((product) => {
+    const mediaImages = (product.media?.nodes || [])
       .filter((media) => media?.image?.url)
       .map((media) => ({
         id: media.id,
@@ -60,8 +75,38 @@ export async function getRecentProductsWithImages(admin, first = 20) {
         url: media.image.url,
         width: media.image.width,
         height: media.image.height,
-      })),
-  }));
+      }));
+
+    const productImages = (product.images?.nodes || [])
+      .filter((image) => image?.url)
+      .map((image) => ({
+        id: image.id,
+        alt: image.altText || "",
+        url: image.url,
+        width: image.width,
+        height: image.height,
+      }));
+
+    const imagesByUrl = new Map();
+    [...mediaImages, ...productImages].forEach((image) => {
+      imagesByUrl.set(image.url, image);
+    });
+
+    if (product.featuredImage?.url && !imagesByUrl.has(product.featuredImage.url)) {
+      imagesByUrl.set(product.featuredImage.url, {
+        id: product.featuredImage.id,
+        alt: product.featuredImage.altText || "",
+        url: product.featuredImage.url,
+        width: product.featuredImage.width,
+        height: product.featuredImage.height,
+      });
+    }
+
+    return {
+      ...product,
+      images: [...imagesByUrl.values()],
+    };
+  });
 }
 
 export async function addImageToProduct(admin, { productId, imageUrl, alt }) {

@@ -25,7 +25,7 @@ const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY || "",
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
-  scopes: (process.env.SCOPES || "read_products,write_products").split(","),
+  scopes: (process.env.SCOPES || "read_products,write_products").split(",").map((scope) => scope.trim()).filter(Boolean),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
   sessionStorage: new SQLiteSessionStorage(sessionDbPath),
@@ -64,7 +64,11 @@ const shopify = shopifyApp({
   },
   hooks: {
     afterAuth: async ({ session }) => {
-      shopify.registerWebhooks({ session });
+      try {
+        await shopify.registerWebhooks({ session });
+      } catch (error) {
+        console.warn("Runtime webhook registration failed; using deployed app config webhooks.", error);
+      }
     },
   },
 });
