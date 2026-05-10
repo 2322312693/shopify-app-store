@@ -16,13 +16,12 @@ import {
   Text,
 } from "@shopify/polaris";
 import { useMemo, useState } from "react";
-import { BILLING_PLANS, STARTER_PLAN, authenticate, sessionStorage } from "../shopify.server";
+import { BILLING_PLANS, STARTER_PLAN, authenticate } from "../shopify.server";
 import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner.server";
 import {
   addImageToProduct,
   getRecentProductsWithImages,
   getRecentProductsWithImagesFromRest,
-  getShopProductDiagnostics,
   migrateOfflineSessionToExpiring,
 } from "../services/shopify-products.server";
 import {
@@ -36,7 +35,7 @@ import {
 
 const isBillingTest = process.env.SHOPIFY_BILLING_TEST !== "false";
 const isBillingCheckEnabled = process.env.SHOPIFY_BILLING_CHECK_ENABLED === "true";
-const showDiagnostics = process.env.SHOPIFY_DEBUG_PANEL !== "false";
+const showDiagnostics = process.env.SHOPIFY_DEBUG_PANEL === "true";
 const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
@@ -157,11 +156,9 @@ export const loader = async ({ request }) => {
   const missingProductScopes = getMissingProductScopes(session);
   const url = new URL(request.url);
   const reauthorizeUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
-  const resetAuthUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&reset=1&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
   const hasAccessToken = Boolean(session.accessToken);
 
   let usageWarning = null;
-  let usageError = null;
   const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
   const planName = await getCurrentPlan({ billing, billingCheck });
   const activeSubscription = await getCurrentSubscription({ billing, planName, billingCheck });
@@ -175,8 +172,6 @@ export const loader = async ({ request }) => {
 
   if (!hasAccessToken) {
     console.warn(`Shopify session for ${session.shop} is missing accessToken. Deleting stale session.`);
-    await sessionStorage.deleteSession(session.id);
-    await sessionStorage.deleteSession(`offline_${session.shop}`);
     productWarning = "Shopify access expired. Reauthorize the app to reload product images.";
   }
 
@@ -191,10 +186,6 @@ export const loader = async ({ request }) => {
     usage = await getUsageStatus(session.shop, planName);
   } catch (error) {
     console.error("Usage backend unavailable", error);
-    usageError = {
-      message: error.message,
-      code: error.code || null,
-    };
     usageWarning = "Usage service is temporarily unavailable. Generation still requires the usage service before it can run.";
   }
 
@@ -228,7 +219,7 @@ export const loader = async ({ request }) => {
 
       if (String(restError.message || "").includes("Non-expiring access tokens are no longer accepted")) {
         try {
-          tokenMigration = await migrateOfflineSessionToExpiring({ session, sessionStorage });
+          tokenMigration = await migrateOfflineSessionToExpiring({ session });
           products = await getRecentProductsWithImagesFromRest({
             shop: session.shop,
             accessToken: tokenMigration.accessToken,
@@ -259,12 +250,14 @@ export const loader = async ({ request }) => {
     scopes: sessionScopes(session),
     missingProductScopes,
     reauthorizeUrl,
-    resetAuthUrl,
     billingCheckEnabled: isBillingCheckEnabled,
     planName,
     usage,
-    usageError,
-    tokenMigration,
+    tokenMigration: tokenMigration ? {
+      scope: tokenMigration.scope,
+      expiresIn: tokenMigration.expiresIn,
+      refreshTokenReceived: tokenMigration.refreshTokenReceived,
+    } : null,
     productQuery: {
       returnedProducts: products.length,
       returnedImages: productImageCount,
@@ -284,7 +277,6 @@ export const loader = async ({ request }) => {
         })),
       })),
     },
-    shopDiagnostics: await getShopProductDiagnostics(admin),
   } : null;
 
   return json({
@@ -298,7 +290,6 @@ export const loader = async ({ request }) => {
     diagnostics,
     missingProductScopes,
     reauthorizeUrl,
-    resetAuthUrl,
     plans: Object.entries(PLAN_LIMITS)
       .filter(([name]) => name !== "Free")
       .map(([name, plan]) => ({
@@ -322,8 +313,6 @@ export const action = async ({ request }) => {
 
   try {
     if (!session.accessToken) {
-      await sessionStorage.deleteSession(session.id);
-      await sessionStorage.deleteSession(`offline_${session.shop}`);
       return json({
         ok: false,
         error: "Shopify access expired. Reauthorize the app first.",
@@ -437,7 +426,6 @@ export default function Index() {
     diagnostics,
     missingProductScopes,
     reauthorizeUrl,
-    resetAuthUrl,
     plans,
   } = useLoaderData();
   const actionData = useActionData();
@@ -533,19 +521,6 @@ export default function Index() {
                 }}
               >
                 Shopify access expired. Reauthorize the app to load product images.
-              </Banner>
-            ) : null}
-
-            {diagnostics?.productQuery?.productError ? (
-              <Banner
-                tone="critical"
-                action={{
-                  content: "Reset Shopify auth",
-                  url: resetAuthUrl,
-                  target: "_top",
-                }}
-              >
-                Shopify Admin API rejected the current session. Reset auth to create a fresh offline token.
               </Banner>
             ) : null}
 

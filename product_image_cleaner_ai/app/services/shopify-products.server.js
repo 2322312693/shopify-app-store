@@ -1,3 +1,5 @@
+import { sessionStorage } from "../shopify.server";
+
 const PRODUCTS_QUERY = `#graphql
   query ProductImages($first: Int!) {
     products(first: $first) {
@@ -15,41 +17,6 @@ const PRODUCTS_QUERY = `#graphql
                 altText
                 width
                 height
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-const SHOP_DIAGNOSTICS_QUERY = `#graphql
-  query ShopProductDiagnostics {
-    currentAppInstallation {
-      accessScopes {
-        handle
-      }
-    }
-    shop {
-      name
-    }
-    products(first: 10) {
-      nodes {
-        id
-        title
-        handle
-        media(first: 3) {
-          nodes {
-            id
-            preview {
-              image {
-                url
-              }
-            }
-            ... on MediaImage {
-              image {
-                url
               }
             }
           }
@@ -161,7 +128,7 @@ export async function getRecentProductsWithImagesFromRest({ shop, accessToken, f
   return products;
 }
 
-export async function migrateOfflineSessionToExpiring({ session, sessionStorage }) {
+export async function migrateOfflineSessionToExpiring({ session }) {
   if (!session?.shop || !session?.accessToken) {
     throw new Error("Missing offline session for token migration.");
   }
@@ -220,18 +187,6 @@ function formatGraphQLErrors(errors = []) {
   }).join("; ");
 }
 
-function compactDiagnosticProducts(products = []) {
-  return products.map((product) => ({
-    id: product.id,
-    title: product.title,
-    handle: product.handle,
-    media: (product.media?.nodes || []).map((media) => ({
-      id: media.id,
-      imageUrl: media.image?.url || media.preview?.image?.url || null,
-    })),
-  }));
-}
-
 async function serializeResponse(response) {
   const headers = {};
   response.headers?.forEach?.((value, key) => {
@@ -263,33 +218,6 @@ async function serializeAdminError(error) {
     responseBody: error.response?.body || null,
     networkStatusCode: error.networkStatusCode || null,
   };
-}
-
-export async function getShopProductDiagnostics(admin) {
-  try {
-    const response = await admin.graphql(SHOP_DIAGNOSTICS_QUERY);
-    const json = await response.json();
-
-    return {
-      ok: !json.errors,
-      errors: json.errors ? json.errors.map((error) => ({
-        message: error.message || JSON.stringify(error),
-        path: error.path || null,
-        extensions: error.extensions || null,
-      })) : null,
-      appAccessScopes: (json.data?.currentAppInstallation?.accessScopes || []).map((scope) => scope.handle),
-      shopName: json.data?.shop?.name || null,
-      products: compactDiagnosticProducts(json.data?.products?.nodes),
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      errors: [await serializeAdminError(error)],
-      appAccessScopes: null,
-      shopName: null,
-      products: [],
-    };
-  }
 }
 
 export async function addImageToProduct(admin, { productId, imageUrl, alt }) {
