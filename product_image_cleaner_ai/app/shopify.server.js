@@ -14,6 +14,15 @@ export const STARTER_PLAN = "Starter";
 export const PRO_PLAN = "Pro";
 export const BUSINESS_PLAN = "Business";
 export const BILLING_PLANS = [STARTER_PLAN, PRO_PLAN, BUSINESS_PLAN];
+const REQUIRED_SCOPES = ["read_products", "write_products"];
+
+function appScopes() {
+  const envScopes = (process.env.SCOPES || "")
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  return [...new Set([...envScopes, ...REQUIRED_SCOPES])];
+}
 
 const sessionDbPath = process.env.SHOPIFY_SESSION_DB_PATH || ".data/shopify_sessions.sqlite";
 const sessionDbDir = path.dirname(sessionDbPath);
@@ -25,7 +34,7 @@ const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY || "",
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
-  scopes: (process.env.SCOPES || "read_products,write_products").split(",").map((scope) => scope.trim()).filter(Boolean),
+  scopes: appScopes(),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
   sessionStorage: new SQLiteSessionStorage(sessionDbPath),
