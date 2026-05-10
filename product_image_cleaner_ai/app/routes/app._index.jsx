@@ -18,7 +18,7 @@ import {
 import { useMemo, useState } from "react";
 import { BILLING_PLANS, STARTER_PLAN, authenticate, sessionStorage } from "../shopify.server";
 import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner.server";
-import { addImageToProduct, getRecentProductsWithImages } from "../services/shopify-products.server";
+import { addImageToProduct, getRecentProductsWithImages, getShopProductDiagnostics } from "../services/shopify-products.server";
 import {
   completeReservation,
   getUsageStatus,
@@ -30,6 +30,7 @@ import {
 
 const isBillingTest = process.env.SHOPIFY_BILLING_TEST !== "false";
 const isBillingCheckEnabled = process.env.SHOPIFY_BILLING_CHECK_ENABLED === "true";
+const showDiagnostics = process.env.SHOPIFY_DEBUG_PANEL !== "false";
 const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
@@ -158,12 +159,14 @@ export const loader = async ({ request }) => {
   await requireProductScopes(request, session);
 
   let usageWarning = null;
+  let usageError = null;
   const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
   const planName = await getCurrentPlan({ billing, billingCheck });
   const activeSubscription = await getCurrentSubscription({ billing, planName, billingCheck });
   const billingWarning = billingCheck?.warning || null;
   let usage = fallbackUsage(planName);
   let productWarning = null;
+  let productError = null;
   let products = [];
 
   try {
@@ -177,6 +180,10 @@ export const loader = async ({ request }) => {
     usage = await getUsageStatus(session.shop, planName);
   } catch (error) {
     console.error("Usage backend unavailable", error);
+    usageError = {
+      message: error.message,
+      code: error.code || null,
+    };
     usageWarning = "Usage service is temporarily unavailable. Generation still requires the usage service before it can run.";
   }
 
@@ -184,8 +191,43 @@ export const loader = async ({ request }) => {
     products = await getRecentProductsWithImages(admin);
   } catch (error) {
     console.error(`Product image query failed for ${session.shop}`, error);
+    productError = {
+      message: error.message,
+      code: error.code || null,
+    };
     productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
   }
+
+  const productImageCount = products.reduce((total, product) => total + product.images.length, 0);
+  const diagnostics = showDiagnostics ? {
+    shop: session.shop,
+    sessionId: session.id,
+    sessionScope: session.scope || null,
+    scopes: sessionScopes(session),
+    billingCheckEnabled: isBillingCheckEnabled,
+    planName,
+    usage,
+    usageError,
+    productQuery: {
+      returnedProducts: products.length,
+      returnedImages: productImageCount,
+      productError,
+      products: products.map((product) => ({
+        id: product.id,
+        title: product.title,
+        handle: product.handle,
+        status: product.status || null,
+        imageCount: product.images.length,
+        images: product.images.map((image) => ({
+          id: image.id,
+          url: image.url,
+          width: image.width,
+          height: image.height,
+        })),
+      })),
+    },
+    shopDiagnostics: await getShopProductDiagnostics(admin),
+  } : null;
 
   return json({
     products,
@@ -195,6 +237,7 @@ export const loader = async ({ request }) => {
     usage,
     usageWarning,
     productWarning,
+    diagnostics,
     plans: Object.entries(PLAN_LIMITS)
       .filter(([name]) => name !== "Free")
       .map(([name, plan]) => ({
@@ -314,6 +357,7 @@ export default function Index() {
     usage: initialUsage,
     usageWarning,
     productWarning,
+    diagnostics,
     plans,
   } = useLoaderData();
   const actionData = useActionData();
@@ -384,6 +428,19 @@ export default function Index() {
 
             {productWarning ? (
               <Banner tone="critical">{productWarning}</Banner>
+            ) : null}
+
+            {diagnostics ? (
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">
+                    Debug diagnostics
+                  </Text>
+                  <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0, fontSize: 12 }}>
+                    {JSON.stringify(diagnostics, null, 2)}
+                  </pre>
+                </BlockStack>
+              </Card>
             ) : null}
 
             <Card>
