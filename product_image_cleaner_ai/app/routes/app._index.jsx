@@ -157,8 +157,8 @@ export const loader = async ({ request }) => {
   try {
     products = await getRecentProductsWithImages(admin);
   } catch (error) {
-    console.error("Product image query failed", error);
-    productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this dev store.";
+    console.error(`Product image query failed for ${session.shop}`, error);
+    productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
   }
 
   return json({
@@ -343,7 +343,7 @@ export default function Index() {
 
             {!billingCheckEnabled ? (
               <Banner tone="warning">
-                Shopify subscription status checks are disabled for local development. Plan buttons still open Shopify Managed Pricing.
+                Shopify subscription status checks are currently disabled. Plan buttons still open Shopify Managed Pricing.
               </Banner>
             ) : null}
 
