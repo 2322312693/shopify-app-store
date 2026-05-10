@@ -16,7 +16,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import { useMemo, useState } from "react";
-import { BILLING_PLANS, STARTER_PLAN, authenticate } from "../shopify.server";
+import { BILLING_PLANS, STARTER_PLAN, authenticate, sessionStorage } from "../shopify.server";
 import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner.server";
 import { addImageToProduct, getRecentProductsWithImages, getShopProductDiagnostics } from "../services/shopify-products.server";
 import {
@@ -151,6 +151,7 @@ export const loader = async ({ request }) => {
   const missingProductScopes = getMissingProductScopes(session);
   const url = new URL(request.url);
   const reauthorizeUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
+  const hasAccessToken = Boolean(session.accessToken);
 
   let usageWarning = null;
   let usageError = null;
@@ -162,6 +163,13 @@ export const loader = async ({ request }) => {
   let productWarning = null;
   let productError = null;
   let products = [];
+
+  if (!hasAccessToken) {
+    console.warn(`Shopify session for ${session.shop} is missing accessToken. Deleting stale session.`);
+    await sessionStorage.deleteSession(session.id);
+    await sessionStorage.deleteSession(`offline_${session.shop}`);
+    productWarning = "Shopify access expired. Reauthorize the app to reload product images.";
+  }
 
   try {
     if (isBillingCheckEnabled) {
@@ -182,7 +190,9 @@ export const loader = async ({ request }) => {
   }
 
   try {
-    products = await getRecentProductsWithImages(admin);
+    if (hasAccessToken) {
+      products = await getRecentProductsWithImages(admin);
+    }
   } catch (error) {
     console.error(`Product image query failed for ${session.shop}`, error);
     productError = {
@@ -198,6 +208,7 @@ export const loader = async ({ request }) => {
     shop: session.shop,
     sessionId: session.id,
     sessionScope: session.scope || null,
+    hasAccessToken,
     scopes: sessionScopes(session),
     missingProductScopes,
     reauthorizeUrl,
@@ -259,6 +270,15 @@ export const action = async ({ request }) => {
   const intent = String(formData.get("intent") || "");
 
   try {
+    if (!session.accessToken) {
+      await sessionStorage.deleteSession(session.id);
+      await sessionStorage.deleteSession(`offline_${session.shop}`);
+      return json({
+        ok: false,
+        error: "Shopify access expired. Reauthorize the app first.",
+      }, { status: 403 });
+    }
+
     if (missingProductScopes.length > 0 && (intent === "generate" || intent === "add")) {
       return json({
         ok: false,
@@ -448,6 +468,19 @@ export default function Index() {
                 }}
               >
                 Missing Shopify product access scopes: {missingProductScopes.join(", ")}.
+              </Banner>
+            ) : null}
+
+            {diagnostics?.hasAccessToken === false ? (
+              <Banner
+                tone="critical"
+                action={{
+                  content: "Reauthorize app",
+                  url: reauthorizeUrl,
+                  target: "_top",
+                }}
+              >
+                Shopify access expired. Reauthorize the app to load product images.
               </Banner>
             ) : null}
 
