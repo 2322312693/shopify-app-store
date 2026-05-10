@@ -111,6 +111,56 @@ export async function getRecentProductsWithImages(admin, first = 20) {
   return products;
 }
 
+export async function getRecentProductsWithImagesFromRest({ shop, accessToken, first = 20 }) {
+  if (!shop || !accessToken) {
+    throw new Error("Missing shop or access token for REST product fallback.");
+  }
+
+  const url = new URL(`https://${shop}/admin/api/2025-10/products.json`);
+  url.searchParams.set("limit", String(first));
+  url.searchParams.set("fields", "id,title,handle,images");
+
+  const response = await fetch(url, {
+    headers: {
+      "X-Shopify-Access-Token": accessToken,
+      "Accept": "application/json",
+    },
+  });
+  const data = await response.json().catch(async () => ({
+    raw: await response.text().catch(() => null),
+  }));
+
+  if (!response.ok) {
+    throw new Error(JSON.stringify({
+      type: "REST_PRODUCTS_ERROR",
+      status: response.status,
+      statusText: response.statusText,
+      body: data,
+    }));
+  }
+
+  const products = (data.products || []).map((product) => ({
+    id: `gid://shopify/Product/${product.id}`,
+    title: product.title,
+    handle: product.handle,
+    images: (product.images || [])
+      .filter((image) => image?.src)
+      .map((image) => ({
+        id: `gid://shopify/ProductImage/${image.id}`,
+        alt: image.alt || "",
+        url: image.src,
+        width: image.width,
+        height: image.height,
+      })),
+  }));
+
+  console.info(
+    `Loaded ${products.length} products and ${products.reduce((total, product) => total + product.images.length, 0)} product images from Shopify REST fallback.`,
+  );
+
+  return products;
+}
+
 function formatGraphQLErrors(errors = []) {
   return errors.map((error) => {
     if (typeof error === "string") return error;

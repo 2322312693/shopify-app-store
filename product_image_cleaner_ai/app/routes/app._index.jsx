@@ -18,7 +18,12 @@ import {
 import { useMemo, useState } from "react";
 import { BILLING_PLANS, STARTER_PLAN, authenticate, sessionStorage } from "../shopify.server";
 import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner.server";
-import { addImageToProduct, getRecentProductsWithImages, getShopProductDiagnostics } from "../services/shopify-products.server";
+import {
+  addImageToProduct,
+  getRecentProductsWithImages,
+  getRecentProductsWithImagesFromRest,
+  getShopProductDiagnostics,
+} from "../services/shopify-products.server";
 import {
   completeReservation,
   getUsageStatus,
@@ -163,6 +168,7 @@ export const loader = async ({ request }) => {
   let usage = fallbackUsage(planName);
   let productWarning = null;
   let productError = null;
+  let productSource = null;
   let products = [];
 
   if (!hasAccessToken) {
@@ -193,6 +199,7 @@ export const loader = async ({ request }) => {
   try {
     if (hasAccessToken) {
       products = await getRecentProductsWithImages(admin);
+      productSource = "graphql";
     }
   } catch (error) {
     console.error(`Product image query failed for ${session.shop}`, error);
@@ -201,7 +208,23 @@ export const loader = async ({ request }) => {
       message: error.message || String(error),
       code: error.code || null,
     };
-    productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
+
+    try {
+      products = await getRecentProductsWithImagesFromRest({
+        shop: session.shop,
+        accessToken: session.accessToken,
+      });
+      productSource = "rest";
+      productWarning = null;
+    } catch (restError) {
+      console.error(`REST product fallback failed for ${session.shop}`, restError);
+      productError.rest = {
+        name: restError.name || null,
+        message: restError.message || String(restError),
+        code: restError.code || null,
+      };
+      productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
+    }
   }
 
   const productImageCount = products.reduce((total, product) => total + product.images.length, 0);
@@ -221,6 +244,7 @@ export const loader = async ({ request }) => {
     productQuery: {
       returnedProducts: products.length,
       returnedImages: productImageCount,
+      source: productSource,
       productError,
       products: products.map((product) => ({
         id: product.id,
