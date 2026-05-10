@@ -16,7 +16,7 @@ import {
   Text,
 } from "@shopify/polaris";
 import { useMemo, useState } from "react";
-import { BILLING_PLANS, STARTER_PLAN, authenticate, sessionStorage } from "../shopify.server";
+import { BILLING_PLANS, STARTER_PLAN, authenticate } from "../shopify.server";
 import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner.server";
 import { addImageToProduct, getRecentProductsWithImages, getShopProductDiagnostics } from "../services/shopify-products.server";
 import {
@@ -42,22 +42,14 @@ function sessionScopes(session) {
     .filter(Boolean);
 }
 
-async function requireProductScopes(request, session) {
+function getMissingProductScopes(session) {
   const scopes = sessionScopes(session);
   const hasProductRead = scopes.includes("read_products");
   const hasProductWrite = scopes.includes("write_products");
-  const missingScopes = [
+  return [
     !hasProductRead ? "read_products" : null,
     !hasProductWrite ? "write_products" : null,
   ].filter(Boolean);
-
-  if (missingScopes.length === 0) return;
-
-  console.warn(`Shopify session for ${session.shop} is missing scopes: ${missingScopes.join(", ")}. Reauthorizing.`);
-  await sessionStorage.deleteSession(session.id);
-
-  const url = new URL(request.url);
-  throw redirect(`/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`);
 }
 
 function isBillingForbidden(error) {
@@ -156,7 +148,9 @@ function fallbackUsage(planName) {
 
 export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
-  await requireProductScopes(request, session);
+  const missingProductScopes = getMissingProductScopes(session);
+  const url = new URL(request.url);
+  const reauthorizeUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
 
   let usageWarning = null;
   let usageError = null;
@@ -204,6 +198,8 @@ export const loader = async ({ request }) => {
     sessionId: session.id,
     sessionScope: session.scope || null,
     scopes: sessionScopes(session),
+    missingProductScopes,
+    reauthorizeUrl,
     billingCheckEnabled: isBillingCheckEnabled,
     planName,
     usage,
@@ -238,6 +234,8 @@ export const loader = async ({ request }) => {
     usageWarning,
     productWarning,
     diagnostics,
+    missingProductScopes,
+    reauthorizeUrl,
     plans: Object.entries(PLAN_LIMITS)
       .filter(([name]) => name !== "Free")
       .map(([name, plan]) => ({
@@ -255,11 +253,18 @@ export const loader = async ({ request }) => {
 
 export const action = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
-  await requireProductScopes(request, session);
+  const missingProductScopes = getMissingProductScopes(session);
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");
 
   try {
+    if (missingProductScopes.length > 0 && (intent === "generate" || intent === "add")) {
+      return json({
+        ok: false,
+        error: `Missing Shopify product access scopes: ${missingProductScopes.join(", ")}. Reauthorize the app first.`,
+      }, { status: 403 });
+    }
+
     if (intent === "subscribe") {
       const plan = String(formData.get("plan") || STARTER_PLAN);
       if (!BILLING_PLANS.includes(plan)) {
@@ -358,6 +363,8 @@ export default function Index() {
     usageWarning,
     productWarning,
     diagnostics,
+    missingProductScopes,
+    reauthorizeUrl,
     plans,
   } = useLoaderData();
   const actionData = useActionData();
@@ -428,6 +435,19 @@ export default function Index() {
 
             {productWarning ? (
               <Banner tone="critical">{productWarning}</Banner>
+            ) : null}
+
+            {missingProductScopes.length > 0 ? (
+              <Banner
+                tone="critical"
+                action={{
+                  content: "Reauthorize app",
+                  url: reauthorizeUrl,
+                  target: "_top",
+                }}
+              >
+                Missing Shopify product access scopes: {missingProductScopes.join(", ")}.
+              </Banner>
             ) : null}
 
             {diagnostics ? (
