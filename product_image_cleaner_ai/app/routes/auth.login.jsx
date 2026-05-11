@@ -1,11 +1,12 @@
 import { json } from "@remix-run/node";
-import { Form, useLoaderData } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import { login, sessionStorage } from "../shopify.server";
 
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");
   const reset = url.searchParams.get("reset");
+
   if (shop && /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shop.trim())) {
     if (reset === "1") {
       await sessionStorage.deleteSession(`offline_${shop.trim()}`);
@@ -14,58 +15,34 @@ export const loader = async ({ request }) => {
   }
 
   return json({
-    error: shop ? "Enter a valid myshopify.com store domain." : null,
-    shop: shop || "",
+    appName: "Product Image Cleaner AI",
   });
 };
 
 export default function Login() {
-  const { error, shop } = useLoaderData();
+  const { appName } = useLoaderData();
 
   return (
-    <main style={{ fontFamily: "Inter, system-ui, sans-serif", margin: "64px auto", maxWidth: 420, padding: 24 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>Product Image Cleaner AI</h1>
+    <main style={{ fontFamily: "Inter, system-ui, sans-serif", margin: "64px auto", maxWidth: 460, padding: 24 }}>
+      <h1 style={{ fontSize: 24, marginBottom: 8 }}>{appName}</h1>
       <p style={{ color: "#5f6368", lineHeight: 1.5, marginBottom: 24 }}>
-        Enter your Shopify store domain to install or open the app.
+        Install or open this app from the Shopify App Store or your Shopify admin Apps page.
       </p>
-      <Form method="get" action="/auth/login">
-        <label htmlFor="shop" style={{ display: "block", fontWeight: 600, marginBottom: 8 }}>
-          Shopify store
-        </label>
-        <input
-          id="shop"
-          name="shop"
-          defaultValue={shop}
-          placeholder="your-store.myshopify.com"
-          style={{
-            border: "1px solid #c9cccf",
-            borderRadius: 6,
-            boxSizing: "border-box",
-            fontSize: 16,
-            marginBottom: 16,
-            padding: "10px 12px",
-            width: "100%",
-          }}
-        />
-        {error ? (
-          <p style={{ color: "#b42318", marginTop: 0 }}>{error}</p>
-        ) : null}
-        <button
-          type="submit"
-          style={{
-            background: "#202223",
-            border: 0,
-            borderRadius: 6,
-            color: "white",
-            cursor: "pointer",
-            fontSize: 15,
-            fontWeight: 600,
-            padding: "10px 14px",
-          }}
-        >
-          Continue
-        </button>
-      </Form>
+      <a
+        href="https://apps.shopify.com/"
+        style={{
+          background: "#202223",
+          borderRadius: 6,
+          color: "white",
+          display: "inline-block",
+          fontSize: 15,
+          fontWeight: 600,
+          padding: "10px 14px",
+          textDecoration: "none",
+        }}
+      >
+        Open Shopify App Store
+      </a>
     </main>
   );
 }

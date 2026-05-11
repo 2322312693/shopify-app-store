@@ -22,7 +22,7 @@ import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner
 import {
   addImageToProduct,
   getRecentProductsWithImages,
-  getRecentProductsWithImagesFromRest,
+  getRecentProductsWithImagesWithToken,
   migrateOfflineSessionToExpiring,
 } from "../services/shopify-products.server";
 import {
@@ -314,41 +314,21 @@ export const loader = async ({ request }) => {
     };
 
     try {
-      products = await getRecentProductsWithImagesFromRest({
+      tokenMigration = await migrateOfflineSessionToExpiring({ session });
+      products = await getRecentProductsWithImagesWithToken({
         shop: session.shop,
-        accessToken: session.accessToken,
+        accessToken: tokenMigration.accessToken,
       });
-      productSource = "rest";
+      productSource = "graphql-expiring-token";
       productWarning = null;
-    } catch (restError) {
-      console.error(`REST product fallback failed for ${session.shop}`, restError);
-      productError.rest = {
-        name: restError.name || null,
-        message: restError.message || String(restError),
-        code: restError.code || null,
+    } catch (migrationError) {
+      console.error(`GraphQL token fallback failed for ${session.shop}`, migrationError);
+      productError.tokenMigration = {
+        name: migrationError.name || null,
+        message: migrationError.message || String(migrationError),
+        code: migrationError.code || null,
       };
-
-      if (String(restError.message || "").includes("Non-expiring access tokens are no longer accepted")) {
-        try {
-          tokenMigration = await migrateOfflineSessionToExpiring({ session });
-          products = await getRecentProductsWithImagesFromRest({
-            shop: session.shop,
-            accessToken: tokenMigration.accessToken,
-          });
-          productSource = "rest-expiring-token";
-          productWarning = null;
-        } catch (migrationError) {
-          console.error(`Offline token migration failed for ${session.shop}`, migrationError);
-          productError.tokenMigration = {
-            name: migrationError.name || null,
-            message: migrationError.message || String(migrationError),
-            code: migrationError.code || null,
-          };
-          productWarning = "Product images could not be loaded because Shopify token migration failed.";
-        }
-      } else {
-        productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
-      }
+      productWarning = "Product images could not be loaded. Reinstall the app or confirm product access is granted for this store.";
     }
   }
 
