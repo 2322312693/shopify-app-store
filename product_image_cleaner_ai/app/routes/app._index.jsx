@@ -226,6 +226,15 @@ function fallbackUsage(planName) {
   };
 }
 
+function usageMatchesPlan(usage, planName) {
+  return normalizePlanKey(usage?.planName) === normalizePlanKey(planName);
+}
+
+function useShopifyPlanWhenBackendIsStale(usage, planName) {
+  if (planName === "Free" || usageMatchesPlan(usage, planName)) return usage;
+  return fallbackUsage(planName);
+}
+
 export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
   const missingProductScopes = getMissingProductScopes(session);
@@ -251,14 +260,19 @@ export const loader = async ({ request }) => {
   }
 
   try {
+    let syncedUsage = null;
     if (isBillingCheckEnabled) {
-      await syncSubscriptionToBackend(session.shop, planName, {
+      syncedUsage = await syncSubscriptionToBackend(session.shop, planName, {
         status: planName === "Free" ? "none" : "active",
         currentPeriodEnd: activeSubscription?.currentPeriodEnd,
         cancelAtPeriodEnd: activeSubscription?.cancelAtPeriodEnd,
       });
+      if (syncedUsage) usage = syncedUsage;
     }
-    usage = await getUsageStatus(session.shop, planName);
+    const latestUsage = await getUsageStatus(session.shop, planName);
+    usage = usageMatchesPlan(latestUsage, planName)
+      ? latestUsage
+      : useShopifyPlanWhenBackendIsStale(syncedUsage || latestUsage, planName);
   } catch (error) {
     console.error("Usage backend unavailable", error);
     usageWarning = "Usage service is temporarily unavailable. Generation still requires the usage service before it can run.";
