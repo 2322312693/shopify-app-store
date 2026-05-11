@@ -35,6 +35,17 @@ function getOutputUrl(output) {
   return output.url || output.image || output.output || "";
 }
 
+function buildPrompt(mode, customRemovalTarget) {
+  if (!customRemovalTarget || mode !== CLEANUP_MODES.objects) return mode.prompt;
+
+  return [
+    `Remove this specific unwanted item from the authorized product image: ${customRemovalTarget}.`,
+    "Only remove the requested item. Keep the main product unchanged and realistic.",
+    "Preserve the original product details, color, shadows, reflection, background style, and composition.",
+    "Fill the removed area naturally. Do not add new text, logos, watermarks, or objects.",
+  ].join(" ");
+}
+
 async function postJson(url, body) {
   const response = await fetch(url, {
     method: "POST",
@@ -53,12 +64,12 @@ async function postJson(url, body) {
   return response.json();
 }
 
-export async function generateCleanProductImage({ imageUrl, cleanupMode, shop }) {
+export async function generateCleanProductImage({ imageUrl, cleanupMode, shop, customRemovalTarget }) {
   if (!imageUrl) throw new Error("Missing source image URL");
 
   const mode = CLEANUP_MODES[cleanupMode] || CLEANUP_MODES.supplier;
   const input = {
-    prompt: mode.prompt,
+    prompt: buildPrompt(mode, customRemovalTarget),
     image_input: [imageUrl],
     aspect_ratio: "match_input_image",
     output_format: "jpg",

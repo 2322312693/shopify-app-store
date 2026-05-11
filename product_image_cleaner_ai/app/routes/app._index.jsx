@@ -14,6 +14,7 @@ import {
   Page,
   Select,
   Text,
+  TextField,
 } from "@shopify/polaris";
 import { useMemo, useState } from "react";
 import { BILLING_PLANS, STARTER_PLAN, authenticate } from "../shopify.server";
@@ -39,6 +40,7 @@ const showDiagnostics = process.env.SHOPIFY_DEBUG_PANEL === "true";
 const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
+const CUSTOM_REMOVAL_MAX_LENGTH = 60;
 const ACTIVE_SUBSCRIPTIONS_QUERY = `#graphql
   query ActiveAppSubscriptions {
     currentAppInstallation {
@@ -412,9 +414,17 @@ export const action = async ({ request }) => {
       const productId = String(formData.get("productId") || "");
       const sourceImageUrl = String(formData.get("sourceImageUrl") || "");
       const cleanupMode = String(formData.get("cleanupMode") || "supplier");
+      const customRemovalTarget = String(formData.get("customRemovalTarget") || "").trim();
 
       if (!productId || !sourceImageUrl) {
         return json({ ok: false, error: "Select a product image first." }, { status: 400 });
+      }
+
+      if (cleanupMode === "objects" && customRemovalTarget.length > CUSTOM_REMOVAL_MAX_LENGTH) {
+        return json({
+          ok: false,
+          error: `Removal instructions must be ${CUSTOM_REMOVAL_MAX_LENGTH} characters or fewer.`,
+        }, { status: 400 });
       }
 
       const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
@@ -429,6 +439,7 @@ export const action = async ({ request }) => {
         const result = await generateCleanProductImage({
           imageUrl: sourceImageUrl,
           cleanupMode,
+          customRemovalTarget: cleanupMode === "objects" ? customRemovalTarget : "",
           shop: session.shop,
         });
 
@@ -506,6 +517,7 @@ export default function Index() {
   const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || "");
   const [selectedImageUrl, setSelectedImageUrl] = useState(products[0]?.images?.[0]?.url || "");
   const [cleanupMode, setCleanupMode] = useState(["supplier"]);
+  const [customRemovalTarget, setCustomRemovalTarget] = useState("");
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId),
@@ -523,6 +535,7 @@ export default function Index() {
   const isAdding = isSubmitting && navigation.formData?.get("intent") === "add";
   const generated = actionData?.ok && actionData.intent === "generate" ? actionData : null;
   const usage = actionData?.usage || initialUsage;
+  const isObjectCleanup = cleanupMode[0] === "objects";
 
   const productOptions = products.map((product) => ({
     label: `${product.title} (${product.images.length} images)`,
@@ -711,10 +724,22 @@ export default function Index() {
                   />
 
                   <Form method="post">
+                    {isObjectCleanup ? (
+                      <TextField
+                        label="What should be removed?"
+                        value={customRemovalTarget}
+                        onChange={(value) => setCustomRemovalTarget(value.slice(0, CUSTOM_REMOVAL_MAX_LENGTH))}
+                        maxLength={CUSTOM_REMOVAL_MAX_LENGTH}
+                        autoComplete="off"
+                        placeholder="Example: cable, hand, sticker"
+                        helpText={`${customRemovalTarget.length}/${CUSTOM_REMOVAL_MAX_LENGTH} characters`}
+                      />
+                    ) : null}
                     <input type="hidden" name="intent" value="generate" />
                     <input type="hidden" name="productId" value={selectedProductId} />
                     <input type="hidden" name="sourceImageUrl" value={selectedImageUrl} />
                     <input type="hidden" name="cleanupMode" value={cleanupMode[0]} />
+                    <input type="hidden" name="customRemovalTarget" value={customRemovalTarget} />
                     <Button
                       submit
                       variant="primary"
