@@ -41,6 +41,11 @@ const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE |
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
 const CUSTOM_REMOVAL_MAX_LENGTH = 60;
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+};
 const ACTIVE_SUBSCRIPTIONS_QUERY = `#graphql
   query ActiveAppSubscriptions {
     currentAppInstallation {
@@ -125,6 +130,28 @@ async function getActiveManagedSubscriptions(admin) {
   return json.data?.currentAppInstallation?.activeSubscriptions || [];
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getManagedPlanWithRetry(admin, attempts = 3) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const activeSubscriptions = await getActiveManagedSubscriptions(admin);
+      const managedPlan = activeSubscriptions.map(planFromSubscription).find(Boolean);
+      if (managedPlan) return managedPlan;
+    } catch (error) {
+      console.error("Managed Pricing subscription lookup failed", error);
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(500);
+    }
+  }
+
+  return null;
+}
+
 async function checkBillingSafely({ billing }) {
   try {
     return {
@@ -157,13 +184,8 @@ async function getCurrentPlan({ admin, billing, billingCheck }) {
   const activePlan = check.result?.appSubscriptions?.find((subscription) => planFromSubscription(subscription));
   if (activePlan) return planFromSubscription(activePlan);
 
-  try {
-    const activeSubscriptions = await getActiveManagedSubscriptions(admin);
-    const managedPlan = activeSubscriptions.map(planFromSubscription).find(Boolean);
-    if (managedPlan) return managedPlan;
-  } catch (error) {
-    console.error("Managed Pricing subscription lookup failed", error);
-  }
+  const managedPlan = await getManagedPlanWithRetry(admin);
+  if (managedPlan) return managedPlan;
 
   return "Free";
 }
@@ -391,7 +413,7 @@ export const loader = async ({ request }) => {
       label: mode.label,
       value,
     })),
-  });
+  }, { headers: NO_STORE_HEADERS });
 };
 
 export const action = async ({ request }) => {

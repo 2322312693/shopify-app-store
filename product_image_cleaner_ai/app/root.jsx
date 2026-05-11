@@ -6,6 +6,12 @@ import appStyles from "./styles/app.css?url";
 export const loader = async () => {
   return json({
     apiKey: process.env.SHOPIFY_API_KEY || "",
+  }, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
   });
 };
 
