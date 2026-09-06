@@ -116,3 +116,11 @@ test('merchant email is read from Shopify and enrichment errors are isolated', a
   assert.equal(await load(async () => { throw new Error('permission denied'); }, () => assert.fail('must not sync'))({ session }), false);
   assert.equal(await load(async () => ({ errors: ['denied'] }), () => assert.fail('must not sync'))({ session }), false);
 });
+
+ test('managed pricing accepts lowercase names and updated prices', () => {
+  for (const [name, amount] of [['Starter', 6.99], ['Pro', 12.99], ['Business', 19.99]]) {
+    assert.equal(planFromSubscription({ name: name.toLowerCase() }), name);
+    assert.equal(planFromSubscription({ name: 'Unnamed', lineItems: [{ plan: { pricingDetails: { price: { amount } } } }] }), name);
+  }
+  assert.equal(planFromSubscription({ name: 'Unnamed', lineItems: [{ plan: { pricingDetails: { price: { amount: 29.99 } } } }] }), null);
+});

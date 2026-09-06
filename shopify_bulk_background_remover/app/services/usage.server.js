@@ -1,9 +1,9 @@
 import { APP_CONFIG } from "../app-config";
 export const PLAN_LIMITS = {
   Free: { label: "Free", limit: 5, period: "lifetime", price: "$0", interval: "lifetime" },
-  Starter: { label: "Starter", limit: 100, period: "month", price: "$9.99", interval: "every 30 days" },
-  Pro: { label: "Pro", limit: 500, period: "month", price: "$29.99", interval: "every 30 days" },
-  Business: { label: "Business", limit: 2000, period: "month", price: "$79.99", interval: "every 30 days" },
+  Starter: { label: "Starter", limit: 100, period: "month", price: "$6.99", interval: "every 30 days" },
+  Pro: { label: "Pro", limit: 500, period: "month", price: "$12.99", interval: "every 30 days" },
+  Business: { label: "Business", limit: 2000, period: "month", price: "$19.99", interval: "every 30 days" },
 };
 
 const APP_KEY = APP_CONFIG.key;

@@ -13,9 +13,9 @@ export function planFromSubscription(subscription) {
   if (byName) return byName;
 
   const amount = Number(subscription?.lineItems?.[0]?.plan?.pricingDetails?.price?.amount);
-  if (Math.abs(amount - 9.99) < 0.01) return "Starter";
-  if (Math.abs(amount - 29.99) < 0.01) return "Pro";
-  if (Math.abs(amount - 79.99) < 0.01) return "Business";
+  if (Math.abs(amount - 6.99) < 0.01) return "Starter";
+  if (Math.abs(amount - 12.99) < 0.01) return "Pro";
+  if (Math.abs(amount - 19.99) < 0.01) return "Business";
 
   return null;
 }
