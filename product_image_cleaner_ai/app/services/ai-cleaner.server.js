@@ -1,3 +1,5 @@
+import { uploadSourceToR2 } from './r2-upload.server.js';
+
 const AI_API_BASE_URL = process.env.AI_API_BASE_URL || "https://ai.zestgpt.com";
 const AI_MODEL = process.env.AI_MODEL || "google/nano-banana";
 
@@ -58,8 +60,9 @@ async function postJson(url, body, timeoutMs = 15000) {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`AI proxy request failed: ${response.status} ${text}`);
+    throw new Error(response.status === 413
+      ? 'The image request is too large. Please try a smaller image.'
+      : `AI processing service is unavailable (${response.status}). Please try again.`);
   }
 
   return response.json();
@@ -67,6 +70,8 @@ async function postJson(url, body, timeoutMs = 15000) {
 
 export async function generateCleanProductImage({ imageUrl, cleanupMode, shop, customRemovalTarget }) {
   if (!imageUrl) throw new Error("Missing source image URL");
+
+  if (imageUrl.startsWith('data:')) imageUrl = await uploadSourceToR2(imageUrl);
 
   const mode = CLEANUP_MODES[cleanupMode] || CLEANUP_MODES.supplier;
   const input = {
