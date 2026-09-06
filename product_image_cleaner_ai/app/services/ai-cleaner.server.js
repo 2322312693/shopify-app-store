@@ -4,7 +4,6 @@ const AI_API_BASE_URL = process.env.AI_API_BASE_URL || "https://ai.zestgpt.com";
 const AI_MODEL = process.env.AI_MODEL || "google/nano-banana";
 
 export const CLEANUP_MODES = {
-  background: { label: "Remove background" },
   edit_text: { label: "Edit image text" },
   custom: { label: "Custom instructions" },
   text: {
@@ -37,7 +36,7 @@ function getOutputUrl(output) {
   if (!output) return "";
   if (typeof output === "string") return output;
   if (Array.isArray(output)) return getOutputUrl(output[0]);
-  return getOutputUrl(output.url || output.image || output.image_url || output.output || output.file);
+  return output.url || output.image || output.output || "";
 }
 
 export function buildPrompt(mode, customRemovalTarget, { originalText = "", replacementText = "", editInstructions = "" } = {}) {
@@ -85,7 +84,7 @@ export async function generateCleanProductImage({ imageUrl, cleanupMode, shop, c
   if (imageUrl.startsWith('data:')) imageUrl = await uploadSourceToR2(imageUrl);
 
   const mode = CLEANUP_MODES[cleanupMode] || CLEANUP_MODES.supplier;
-  const input = cleanupMode === "background" ? { image: imageUrl, format: "png", reverse: false, background_type: "rgba" } : {
+  const input = {
     prompt: buildPrompt(mode, customRemovalTarget, { originalText, replacementText, editInstructions }),
     image_input: [imageUrl],
     aspect_ratio: "match_input_image",
@@ -93,7 +92,7 @@ export async function generateCleanProductImage({ imageUrl, cleanupMode, shop, c
   };
 
   const createResult = await postJson(`${AI_API_BASE_URL}/replicate/create`, {
-    ...(cleanupMode === "background" ? { version: "a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc" } : { model: AI_MODEL }),
+    model: AI_MODEL,
     input,
     user_id: `shopify_${shop || "unknown"}`,
   });
