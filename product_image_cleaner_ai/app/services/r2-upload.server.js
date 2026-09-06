@@ -10,7 +10,7 @@ export async function uploadSourceToR2(dataUrl, fetchImpl = fetch) {
   const response = await fetchImpl(`${process.env.AI_API_BASE_URL || 'https://ai.zestgpt.com'}/upload/get-presigned-url`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Channel: 'node-nauth' },
-    body: JSON.stringify({ bucketName: 'video', objectName }),
+    body: JSON.stringify({ bucketName: 'store', objectName }),
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error('Image upload could not start. Please try again.');

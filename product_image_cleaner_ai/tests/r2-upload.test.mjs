@@ -9,7 +9,7 @@ test('large image bytes bypass Node and only go to signed R2 PUT', async () => {
     calls.push(url);
     if (options.method === 'POST') {
       assert.ok(options.body.length < 300);
-      assert.equal(JSON.parse(options.body).bucketName, 'video');
+      assert.equal(JSON.parse(options.body).bucketName, 'store');
       return Response.json({ success: true, url: 'https://test.r2.cloudflarestorage.com/video/test?signature=test' });
     }
     assert.equal(options.method, 'PUT');
