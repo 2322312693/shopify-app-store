@@ -1,6 +1,6 @@
 const PLAN_LIMITS = { Free: 0, Starter: 100, Pro: 500, Business: 2000 };
 
-function normalizePlanKey(value) {
+export function normalizePlanKey(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
