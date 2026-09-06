@@ -46,3 +46,15 @@ test('invalid file consumes no quota; failed generation refunds reservation', as
  const failed=await actionWith(calls,true)({request:uploadRequest()});
  assert.equal(failed.status,500);assert.deepEqual(calls,['verify-plan','reserve','generate','refund']);
 });
+
+test('empty and oversized editing instructions are rejected before quota reservation', async () => {
+ for (const [mode, fields] of [
+  ['custom', {}], ['custom', {editInstructions:'x'.repeat(2001)}],
+  ['edit_text', {originalText:'SALE'}], ['edit_text', {originalText:'SALE',replacementText:'x'.repeat(301)}],
+ ]) {
+  const calls=[]; const base=uploadRequest(); const form=await base.formData();
+  form.set('cleanupMode',mode); for(const [key,value] of Object.entries(fields))form.set(key,value);
+  const result=await actionWith(calls)({request:new Request(base.url,{method:'POST',body:form})});
+  assert.equal(result.status,400);assert.deepEqual(calls,[]);
+ }
+});

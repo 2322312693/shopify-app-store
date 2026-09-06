@@ -366,6 +366,15 @@ export const action = async ({ request }) => {
       }
       const cleanupMode = String(formData.get("cleanupMode") || "supplier");
       const customRemovalTarget = String(formData.get("customRemovalTarget") || "").trim();
+      const originalText = String(formData.get("originalText") || "").trim();
+      const replacementText = String(formData.get("replacementText") || "").trim();
+      const editInstructions = String(formData.get("editInstructions") || "").trim();
+      if (cleanupMode === "edit_text" && (!originalText || !replacementText || originalText.length > 300 || replacementText.length > 300)) {
+        return json({ ok: false, error: "Enter original and replacement text (up to 300 characters each)." }, { status: 400 });
+      }
+      if (cleanupMode === "custom" && (!editInstructions || editInstructions.length > 2000)) {
+        return json({ ok: false, error: "Enter editing instructions (up to 2000 characters)." }, { status: 400 });
+      }
 
       if ((!isUpload && !productId) || !sourceImageUrl) {
         return json({ ok: false, error: "Select a product image first." }, { status: 400 });
@@ -390,6 +399,7 @@ export const action = async ({ request }) => {
       try {
         const result = await generateCleanProductImage({
           imageUrl: sourceImageUrl,
+          originalText, replacementText, editInstructions,
           cleanupMode,
           customRemovalTarget: cleanupMode === "objects" ? customRemovalTarget : "",
           shop: session.shop,
@@ -479,6 +489,10 @@ export default function Index() {
   const [downloadError, setDownloadError] = useState("");
   const [cleanupMode, setCleanupMode] = useState(["supplier"]);
   const [customRemovalTarget, setCustomRemovalTarget] = useState("");
+  const [originalText, setOriginalText] = useState("");
+  const [replacementText, setReplacementText] = useState("");
+  const [editInstructions, setEditInstructions] = useState("");
+  const missingEditInput = cleanupMode[0] === "edit_text" ? !originalText.trim() || !replacementText.trim() : cleanupMode[0] === "custom" && !editInstructions.trim();
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId),
@@ -550,7 +564,7 @@ export default function Index() {
   return (
     <Page
       title={APP_CONFIG.name}
-      subtitle="Clean product photos from Shopify or your computer. Download results or add them to your store."
+      subtitle="Clean and edit product photos from Shopify or your computer. Download results or add them to your store."
       primaryAction={{
         content: "Open Shopify product",
         disabled: !selectedProduct?.handle,
@@ -702,7 +716,7 @@ export default function Index() {
                 )}
 
                   <ChoiceList
-                    title="Cleanup mode"
+                    title="Editing mode"
                     choices={cleanupModes}
                     selected={cleanupMode}
                     onChange={setCleanupMode}
@@ -721,6 +735,15 @@ export default function Index() {
                         helpText={`${customRemovalTarget.length}/${CUSTOM_REMOVAL_MAX_LENGTH} characters`}
                       />
                     ) : null}
+                    {cleanupMode[0] === "edit_text" ? (
+                      <BlockStack gap="300">
+                        <TextField label="Original text in image" name="originalText" value={originalText} onChange={setOriginalText} maxLength={300} multiline={2} autoComplete="off" placeholder="Example: SUMMER SALE" helpText="Enter the exact text you want to replace." />
+                        <TextField label="Replace with" name="replacementText" value={replacementText} onChange={setReplacementText} maxLength={300} multiline={2} autoComplete="off" placeholder="Example: AUTUMN SALE" helpText="Up to 300 characters. Check spelling in the generated image before saving." />
+                      </BlockStack>
+                    ) : null}
+                    {cleanupMode[0] === "custom" ? (
+                      <TextField label="How would you like to edit this image?" name="editInstructions" value={editInstructions} onChange={setEditInstructions} maxLength={2000} multiline={4} autoComplete="off" placeholder="Example: Change the background to warm beige, keep the product unchanged, and add a soft shadow." helpText={`${editInstructions.length}/2000 characters. Describe what to change and what to keep. Any language is welcome.`} />
+                    ) : null}
                     <input type="hidden" name="intent" value="generate" />
                     <input type="hidden" name="productId" value={selectedProductId} />
                     <input type="hidden" name="sourceImageUrl" value={selectedImageUrl} />
@@ -730,9 +753,9 @@ export default function Index() {
                       submit
                       variant="primary"
                       loading={isGenerating}
-                      disabled={(imageSource[0] === "upload" ? !uploadPreview || !!uploadError : !selectedImage) || isSubmitting}
+                      disabled={(imageSource[0] === "upload" ? !uploadPreview || !!uploadError : !selectedImage) || isSubmitting || missingEditInput}
                     >
-                      Generate cleaned image
+                      Generate edited image
                     </Button>
                   </Form>
                 </BlockStack>
@@ -786,7 +809,7 @@ export default function Index() {
                 </BlockStack>
               ) : (
                 <Text as="p" tone="subdued">
-                  Generate a cleaned image to preview it here before adding it to the product.
+                  Generate an edited image to preview, download, or add to a product.
                 </Text>
               )}
             </BlockStack>
