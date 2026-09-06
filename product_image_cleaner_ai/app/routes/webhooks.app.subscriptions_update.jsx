@@ -1,3 +1,4 @@
+import { syncMerchantProfileSafely } from "../services/merchant-profile.server";
 import { queryAdminWithRecovery } from "../services/admin-query.server";
 import { planFromSubscription } from "../services/subscription-policy";
 import { authenticate, unauthenticated } from "../shopify.server";
@@ -40,5 +41,6 @@ export const action = async ({ request }) => {
     cancelAtPeriodEnd: subscription.cancel_at_period_end || subscription.cancelAtPeriodEnd,
   });
 
+  await syncMerchantProfileSafely({ admin, session, planName });
   return new Response();
 };

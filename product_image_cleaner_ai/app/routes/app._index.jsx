@@ -1,3 +1,4 @@
+import { syncMerchantProfileSafely } from "../services/merchant-profile.server";
 import { queryAdminWithRecovery } from "../services/admin-query.server";
 import { normalizePlanKey, planFromSubscription, selectActiveSubscription } from "../services/subscription-policy";
 import { json, redirect } from "@remix-run/node";
@@ -189,6 +190,7 @@ export const loader = async ({ request }) => {
   const billingCheck = null;
   const planName = await getCurrentPlan({ admin, session, billing, billingCheck });
   const activeSubscription = await getCurrentSubscription({ admin, session, billing, planName, billingCheck });
+  await syncMerchantProfileSafely({ admin, session, planName });
   const billingWarning = billingCheck?.warning || null;
   let usage = fallbackUsage(planName);
   let productWarning = null;

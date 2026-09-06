@@ -22,6 +22,7 @@ function subscriptionAction(current, sync, payload = { status: 'CANCELLED', name
     authenticate: { webhook: async () => ({ shop: 'example.myshopify.com', payload }) },
     unauthenticated: { admin: async () => ({ admin: { graphql: async () => ({ json: async () => current }) } }) },
     queryAdminWithRecovery: async ({ admin }) => (await admin.graphql()).json(),
+    syncMerchantProfileSafely: async () => false,
     planFromSubscription, syncSubscriptionToBackend: sync,
   });
 }
@@ -102,4 +103,16 @@ test('lifecycle webhooks validate HMAC without an API session', async () => {
     if (previous === undefined) delete process.env.SHOPIFY_API_SECRET;
     else process.env.SHOPIFY_API_SECRET = previous;
   }
+});
+
+test('merchant email is read from Shopify and enrichment errors are isolated', async () => {
+  const code = fs.readFileSync(new URL('../app/services/merchant-profile.server.js', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace('export async function', 'async function');
+  const load = (query, sync) => new Function('queryAdminWithRecovery', 'syncMerchantProfileToBackend', code + '; return syncMerchantProfileSafely;')(query, sync);
+  let saved;
+  const session = { shop: 'example.myshopify.com' };
+  const sync = load(async () => ({ data: { shop: { name: 'Example', email: 'owner@example.com' } } }), async (...args) => { saved = args; });
+  assert.equal(await sync({ session, planName: 'Pro' }), true);
+  assert.deepEqual(saved, ['example.myshopify.com', 'Pro', { email: 'owner@example.com', name: 'Example' }]);
+  assert.equal(await load(async () => { throw new Error('permission denied'); }, () => assert.fail('must not sync'))({ session }), false);
+  assert.equal(await load(async () => ({ errors: ['denied'] }), () => assert.fail('must not sync'))({ session }), false);
 });

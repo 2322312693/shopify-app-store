@@ -35,7 +35,7 @@ function toQuery(params) {
   return query.toString();
 }
 
-async function requestUsage(path, { method = "GET", body, query } = {}) {
+async function requestUsage(path, { method = "GET", body, query, timeoutMs } = {}) {
   const errors = [];
 
   for (const baseUrl of usageApiBaseUrls()) {
@@ -43,6 +43,7 @@ async function requestUsage(path, { method = "GET", body, query } = {}) {
     try {
       const response = await fetch(url, {
         method,
+        signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
         headers: headers(),
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -124,4 +125,10 @@ export async function syncSubscriptionToBackend(shop, planName, subscription = {
     },
   });
   return data.usage;
+}
+
+export async function syncMerchantProfileToBackend(shop, planName, merchant) {
+  return requestUsage("/profile", {
+    method: "POST", body: { shop, planName, merchant }, timeoutMs: 5000,
+  });
 }
