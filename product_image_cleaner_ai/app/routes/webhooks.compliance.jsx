@@ -1,11 +1,12 @@
-import { authenticate, sessionStorage } from "../shopify.server";
+import { authenticateLifecycleWebhook } from "../services/webhook-auth.server";
+import { sessionStorage } from "../shopify.server";
 
 const CUSTOMER_DATA_REQUEST = "CUSTOMERS_DATA_REQUEST";
 const CUSTOMERS_REDACT = "CUSTOMERS_REDACT";
 const SHOP_REDACT = "SHOP_REDACT";
 
 export const action = async ({ request }) => {
-  const { shop, topic, payload } = await authenticate.webhook(request);
+  const { shop, topic, payload } = await authenticateLifecycleWebhook(request);
 
   console.log(`Received ${topic} compliance webhook for ${shop}`);
 

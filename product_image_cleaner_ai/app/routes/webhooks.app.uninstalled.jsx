@@ -1,9 +1,10 @@
-import { authenticate, sessionStorage } from "../shopify.server";
+import { authenticateLifecycleWebhook } from "../services/webhook-auth.server";
+import { sessionStorage } from "../shopify.server";
 
 import { syncSubscriptionToBackend } from "../services/usage.server";
 
 export const action = async ({ request }) => {
-  const { shop, session, topic } = await authenticate.webhook(request);
+  const { shop, session, topic } = await authenticateLifecycleWebhook(request);
 
   console.log(`Received ${topic} webhook for ${shop}`);
 

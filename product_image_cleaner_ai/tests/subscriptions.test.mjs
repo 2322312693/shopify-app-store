@@ -42,7 +42,7 @@ test('lookup and persistence failures are not acknowledged', async () => {
 test('uninstall persists revocation before deleting sessions', async () => {
   const calls = [];
   const action = loadAction('webhooks.app.uninstalled.jsx', {
-    authenticate: { webhook: async () => ({ shop: 'example.myshopify.com', session: { id: 'online' } }) },
+    authenticateLifecycleWebhook: async () => ({ shop: 'example.myshopify.com', session: { id: 'online' } }),
     sessionStorage: { deleteSession: async (id) => calls.push(id) },
     syncSubscriptionToBackend: async (shop, plan, sub) => { calls.push(sub.status); assert.equal(plan, 'Free'); },
   });
@@ -84,4 +84,22 @@ test('session storage preserves expiring offline token pairs', async () => {
   assert.equal(restored.refreshToken, session.refreshToken);
   assert.equal(restored.expires.getTime(), session.expires.getTime());
   assert.equal(restored.refreshTokenExpires.getTime(), session.refreshTokenExpires.getTime());
+});
+
+test('lifecycle webhooks validate HMAC without an API session', async () => {
+  const { authenticateLifecycleWebhook } = await import('../app/services/webhook-auth.server.js');
+  const { createHmac } = await import('node:crypto');
+  const previous = process.env.SHOPIFY_API_SECRET;
+  process.env.SHOPIFY_API_SECRET = 'test-webhook-secret';
+  try {
+    const body = '{}';
+    const headers = { 'x-shopify-shop-domain': 'test.myshopify.com', 'x-shopify-topic': 'app/uninstalled', 'x-shopify-hmac-sha256': createHmac('sha256', 'test-webhook-secret').update(body).digest('base64') };
+    const event = await authenticateLifecycleWebhook(new Request('https://example.com', { method: 'POST', body, headers }));
+    assert.equal(event.topic, 'APP_UNINSTALLED');
+    headers['x-shopify-hmac-sha256'] = 'invalid';
+    await assert.rejects(authenticateLifecycleWebhook(new Request('https://example.com', { method: 'POST', body, headers })), error => error.status === 401);
+  } finally {
+    if (previous === undefined) delete process.env.SHOPIFY_API_SECRET;
+    else process.env.SHOPIFY_API_SECRET = previous;
+  }
 });
