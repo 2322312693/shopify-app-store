@@ -9,11 +9,9 @@ import {
   Badge,
   Banner,
   BlockStack,
-  Box,
   Button,
   Card,
   ChoiceList,
-  EmptyState,
   InlineStack,
   Layout,
   Page,
@@ -21,8 +19,10 @@ import {
   Text,
   TextField,
 } from "@shopify/polaris";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BILLING_PLANS, STARTER_PLAN, authenticate } from "../shopify.server";
+import { readUploadedImage } from "../services/upload-image.server";
+import { MAX_UPLOAD_BYTES, UPLOAD_TYPES } from "../services/upload-policy";
 import { CLEANUP_MODES, generateCleanProductImage } from "../services/ai-cleaner.server";
 import {
   addImageToProduct,
@@ -326,6 +326,9 @@ export const loader = async ({ request }) => {
 export const action = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
   const missingProductScopes = getMissingProductScopes(session);
+  if (Number(request.headers.get("content-length")) > 4 * 1024 * 1024) {
+    return json({ ok: false, error: "Upload an image smaller than 3 MB." }, { status: 413 });
+  }
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");
 
@@ -354,12 +357,17 @@ export const action = async ({ request }) => {
     }
 
     if (intent === "generate") {
-      const productId = String(formData.get("productId") || "");
-      const sourceImageUrl = String(formData.get("sourceImageUrl") || "");
+      const isUpload = formData.get("imageSource") === "upload";
+      const productId = isUpload ? "" : String(formData.get("productId") || "");
+      let sourceImageUrl = String(formData.get("sourceImageUrl") || "");
+      if (isUpload) {
+        try { sourceImageUrl = await readUploadedImage(formData.get("imageFile")); }
+        catch (error) { return json({ ok: false, error: error.message }, { status: 400 }); }
+      }
       const cleanupMode = String(formData.get("cleanupMode") || "supplier");
       const customRemovalTarget = String(formData.get("customRemovalTarget") || "").trim();
 
-      if (!productId || !sourceImageUrl) {
+      if ((!isUpload && !productId) || !sourceImageUrl) {
         return json({ ok: false, error: "Select a product image first." }, { status: 400 });
       }
 
@@ -374,7 +382,8 @@ export const action = async ({ request }) => {
       const planName = await getCurrentPlan({ admin, session, billing, billingCheck });
       const reservation = await reserveGeneration(session.shop, planName, {
         productId,
-        sourceImageUrl,
+        sourceImageUrl: isUpload ? null : sourceImageUrl,
+        imageSource: isUpload ? "upload" : "product",
         cleanupMode,
       });
 
@@ -398,7 +407,8 @@ export const action = async ({ request }) => {
           intent,
           usage,
           productId,
-          sourceImageUrl,
+          sourceImageUrl: isUpload ? null : sourceImageUrl,
+          imageSource: isUpload ? "upload" : "product",
           cleanupMode,
           outputUrl: result.outputUrl,
           jobId: result.jobId,
@@ -459,6 +469,14 @@ export default function Index() {
   const navigation = useNavigation();
   const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || "");
   const [selectedImageUrl, setSelectedImageUrl] = useState(products[0]?.images?.[0]?.url || "");
+  const [imageSource, setImageSource] = useState(["product"]);
+  const uploadReadId = useRef(0);
+  const [uploadPreview, setUploadPreview] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const [generated, setGenerated] = useState(null);
+  const [destinationProductId, setDestinationProductId] = useState(products[0]?.id || "");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
   const [cleanupMode, setCleanupMode] = useState(["supplier"]);
   const [customRemovalTarget, setCustomRemovalTarget] = useState("");
 
@@ -472,11 +490,48 @@ export default function Index() {
     [selectedProduct, selectedImageUrl],
   );
 
-  const isSubmitting = navigation.state === "submitting";
+  const isSubmitting = navigation.state !== "idle";
   const isGenerating =
     isSubmitting && navigation.formData?.get("intent") === "generate";
   const isAdding = isSubmitting && navigation.formData?.get("intent") === "add";
-  const generated = actionData?.ok && actionData.intent === "generate" ? actionData : null;
+  useEffect(() => {
+    if (actionData?.ok && actionData.intent === "generate") {
+      setGenerated({ ...actionData, sourceImageUrl: actionData.sourceImageUrl || uploadPreview });
+      if (actionData.productId) setDestinationProductId(actionData.productId);
+      setDownloadError("");
+    }
+  }, [actionData]);
+
+  function handleUpload(event) {
+    const readId = ++uploadReadId.current;
+    const file = event.target.files?.[0];
+    setUploadPreview(""); setUploadError("");
+    if (!file) return;
+    if (!UPLOAD_TYPES.includes(file.type) || file.size > MAX_UPLOAD_BYTES || !file.size) {
+      setUploadError("Choose a JPG, PNG, or WebP image up to 3 MB.");
+      event.target.value = ""; return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => { if (readId === uploadReadId.current) setUploadPreview(String(reader.result)); };
+    reader.onerror = () => { if (readId === uploadReadId.current) setUploadError("This file could not be read. Please choose another image."); };
+    reader.readAsDataURL(file);
+  }
+
+  async function downloadResult() {
+    setIsDownloading(true); setDownloadError("");
+    try {
+      const response = await fetch(generated.outputUrl, { signal: AbortSignal.timeout(30000) });
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = `cleaned-product-image.${blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg"}`;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      setDownloadError("Download could not start. Open the image below and save it from your browser.");
+    } finally { setIsDownloading(false); }
+  }
   const usage = actionData?.usage || initialUsage;
   const isObjectCleanup = cleanupMode[0] === "objects";
 
@@ -495,7 +550,7 @@ export default function Index() {
   return (
     <Page
       title={APP_CONFIG.name}
-      subtitle="Clean authorized product images and add the result back to Shopify."
+      subtitle="Clean product photos from Shopify or your computer. Download results or add them to your store."
       primaryAction={{
         content: "Open Shopify product",
         disabled: !selectedProduct?.handle,
@@ -611,53 +666,40 @@ export default function Index() {
               <Banner tone="success">Cleaned image added to the product.</Banner>
             ) : null}
 
-            {products.length === 0 ? (
-              <Card>
-                <EmptyState
-                  heading="No products found"
-                  image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-                >
-                  <p>Add products with images to this store, then return here to clean them.</p>
-                </EmptyState>
-              </Card>
-            ) : (
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h2" variant="headingMd">
-                      Select product image
-                    </Text>
-                    <Badge tone="attention">Original kept</Badge>
-                  </InlineStack>
-
-                  <Select
-                    label="Product"
-                    options={productOptions}
-                    value={selectedProductId}
-                    onChange={handleProductChange}
-                  />
-
-                  {selectedProduct?.images?.length ? (
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">Choose an image</Text>
+                <ChoiceList
+                  title="Image source"
+                  choices={[{ label: "Shopify product", value: "product", disabled: isSubmitting }, { label: "Upload from computer", value: "upload", disabled: isSubmitting }]}
+                  selected={imageSource}
+                  onChange={(value) => { uploadReadId.current += 1; setImageSource(value); setUploadPreview(""); setUploadError(""); }}
+                />
+                {imageSource[0] === "upload" ? (
+                  <BlockStack gap="300">
+                    <div className="uploadArea">
+                      <input type="file" name="imageFile" form="generate-form" accept="image/jpeg,image/png,image/webp" aria-label="Upload product image" onChange={handleUpload} disabled={isSubmitting} />
+                      <Text as="p" fontWeight="semibold">Drop an image here or click to upload</Text>
+                      <Text as="p" tone="subdued">JPG, PNG or WebP · Up to 3 MB</Text>
+                    </div>
+                    {uploadError ? <Banner tone="critical">{uploadError}</Banner> : null}
+                    {uploadPreview ? <img className="uploadPreview" src={uploadPreview} alt="Selected upload" /> : null}
+                    <Text as="p" tone="subdued">Your image is sent to our AI processing service when you generate a result. Uploads use the same plan quota as Shopify images. Nothing is added to your store until you choose Add to product.</Text>
+                  </BlockStack>
+                ) : products.length === 0 ? (
+                  <Text as="p">No products found. You can upload an image from your computer instead.</Text>
+                ) : (
+                  <BlockStack gap="300">
+                    <Select label="Product" options={productOptions} value={selectedProductId} onChange={handleProductChange} disabled={isSubmitting} />
                     <div className="imageGrid">
-                      {selectedProduct.images.map((image) => (
-                        <button
-                          key={image.id}
-                          type="button"
-                          className={`imageChoice ${selectedImageUrl === image.url ? "imageChoiceSelected" : ""}`}
-                          onClick={() => setSelectedImageUrl(image.url)}
-                          aria-label="Select product image"
-                        >
+                      {selectedProduct?.images?.map((image) => (
+                        <button key={image.id} type="button" className={`imageChoice ${selectedImageUrl === image.url ? "imageChoiceSelected" : ""}`} onClick={() => setSelectedImageUrl(image.url)} aria-label="Select product image" disabled={isSubmitting}>
                           <img src={image.url} alt={image.alt || selectedProduct.title} />
                         </button>
                       ))}
                     </div>
-                  ) : (
-                    <Box padding="400" background="bg-surface-secondary" borderRadius="200">
-                      <Text as="p" tone="subdued">
-                        This product has no image media.
-                      </Text>
-                    </Box>
-                  )}
+                  </BlockStack>
+                )}
 
                   <ChoiceList
                     title="Cleanup mode"
@@ -666,7 +708,8 @@ export default function Index() {
                     onChange={setCleanupMode}
                   />
 
-                  <Form method="post">
+                  <Form id="generate-form" method="post" encType="multipart/form-data">
+                    <input type="hidden" name="imageSource" value={imageSource[0]} />
                     {isObjectCleanup ? (
                       <TextField
                         label="What should be removed?"
@@ -687,14 +730,13 @@ export default function Index() {
                       submit
                       variant="primary"
                       loading={isGenerating}
-                      disabled={!selectedImage || isSubmitting}
+                      disabled={(imageSource[0] === "upload" ? !uploadPreview || !!uploadError : !selectedImage) || isSubmitting}
                     >
                       Generate cleaned image
                     </Button>
                   </Form>
                 </BlockStack>
               </Card>
-            )}
           </BlockStack>
         </Layout.Section>
 
@@ -730,11 +772,14 @@ export default function Index() {
                     </BlockStack>
                   </div>
 
+                  <Button onClick={downloadResult} loading={isDownloading}>Download image</Button>
+                  {downloadError ? <Banner tone="warning">{downloadError} <a href={generated.outputUrl} target="_blank" rel="noreferrer">Open image</a></Banner> : null}
                   <Form method="post">
+                    <Select label="Save to product" options={[{ label: "Choose a product", value: "" }, ...products.map(p => ({ label: p.title, value: p.id }))]} value={destinationProductId} onChange={setDestinationProductId} disabled={isSubmitting} />
                     <input type="hidden" name="intent" value="add" />
-                    <input type="hidden" name="productId" value={generated.productId} />
+                    <input type="hidden" name="productId" value={destinationProductId} />
                     <input type="hidden" name="outputUrl" value={generated.outputUrl} />
-                    <Button submit variant="primary" loading={isAdding} disabled={isSubmitting}>
+                    <Button submit variant="primary" loading={isAdding} disabled={isSubmitting || !destinationProductId}>
                       Add to product
                     </Button>
                   </Form>
