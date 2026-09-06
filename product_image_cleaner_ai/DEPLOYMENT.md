@@ -9,7 +9,7 @@ Back up the node_server database and retain the app encryption secret. Session e
 
 ## Deploy an app
 
-1. Deploy node_server with the `/shopify/:app_key/sessions` routes. Set SHOPIFY_INTERNAL_API_KEY on both services to the same existing value.
+1. Set the same nonempty SHOPIFY_INTERNAL_API_KEY on the existing Render service and the new Vercel Production environment before enabling it on node_server. Keep this secret out of Git. Deploy node_server with the `/shopify/:app_key/sessions` routes. Set SHOPIFY_INTERNAL_API_KEY on both services to the same existing value.
 2. Create a Vercel project from this repository. Root Directory is the app folder, Framework is Remix, Node.js is 24.x, Install is npm ci and Build is npm run build. Enable Fluid Compute. A commercial Vercel plan is required for the paid production app.
 3. Copy `.env.example` into Vercel Environment Variables and supply existing app credentials. SHOPIFY_APP_URL must be the canonical custom domain registered in Shopify. Vercel automatically selects remote session storage; never use local SQLite there.
 4. Preview deployments must not use live Shopify credentials or the production app key. Use a separate development Shopify app and backend app config for authenticated preview tests. Keep preview deployment protection enabled.
@@ -38,3 +38,7 @@ VERCEL=1 npm run build
 ```
 
 Existing Render deployment remains supported when VERCEL is absent and SHOPIFY_SESSION_STORAGE is not remote. Its local SQLite storage is for compatibility, not the recommended production configuration.
+
+## Dependency compatibility
+
+@vercel/remix 2.16.7 declares exact older Remix peers. Scoped npm overrides keep the adapter on this app’s patched Remix 2.17 runtime instead of downgrading the framework. Validate npm ci as well as both build modes whenever upgrading either package.
