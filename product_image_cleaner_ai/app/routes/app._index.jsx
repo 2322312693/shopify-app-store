@@ -565,6 +565,7 @@ export default function Index() {
     <Page
       title={APP_CONFIG.name}
       subtitle="Clean and edit product photos from Shopify or your computer. Download results or add them to your store."
+      secondaryActions={[{ content: "Bulk background remover", url: "/app/background" }]}
       primaryAction={{
         content: "Open Shopify product",
         disabled: !selectedProduct?.handle,
