@@ -1,3 +1,4 @@
+import "../styles/bulk-picker.css";
 export const config = { maxDuration: 300 };
 import { APP_CONFIG } from "../app-config";
 import { syncMerchantProfileSafely } from "../services/merchant-profile.server";
@@ -464,6 +465,10 @@ function Result({ item, products }) {
   const save = useFetcher();
   const [destination, setDestination] = useState(item.productId || products[0]?.id || '');
   const [error, setError] = useState('');
+  const [dragging, setDragging] = useState(false);
+  const [search, setSearch] = useState('');
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const fileInput = useRef(null);
   const [downloading, setDownloading] = useState(false);
   async function download() {
     setDownloading(true); setError('');
@@ -495,6 +500,10 @@ export default function BulkBackground() {
   const [items, setItems] = useState([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
+  const [dragging, setDragging] = useState(false);
+  const [search, setSearch] = useState('');
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const fileInput = useRef(null);
   const [currentUsage, setCurrentUsage] = useState(usage);
   const flight = useRef(null);
   const previous = useRef(null);
@@ -523,7 +532,11 @@ export default function BulkBackground() {
     processor.submit(form,{method:'post',encType:'multipart/form-data'});
   },[processor.state,processor.data,running,items]);
   function upload(event) {
-    const files=Array.from(event.target.files || []); event.target.value='';setError('');
+    const files=Array.from(event.target.files || []); event.target.value=''; addFiles(files);
+  }
+  function addFiles(files) {
+    if (running || items.some(i=>i.status==='processing')) return;
+    setError('');
     if(items.length+files.length>20){setError('Choose up to 20 images per batch.');return;}
     if(files.some(f=>!UPLOAD_TYPES.includes(f.type)||!f.size||f.size>MAX_UPLOAD_BYTES)){setError('Each image must be JPG, PNG or WebP, no larger than 3 MB.');return;}
     setItems(list=>[...list,...files.map(file=>{const preview=URL.createObjectURL(file);previews.current.push(preview);return {id:crypto.randomUUID(),file,preview,name:file.name,status:'pending'};})]);
@@ -543,11 +556,41 @@ export default function BulkBackground() {
       {error && <Banner tone="critical">{error}</Banner>}
       <Card><BlockStack gap="300"><Text as="h2" variant="headingMd">1. Choose images</Text>
         <Text as="p">Upload images you own or are authorized to edit. Selected files are uploaded to our image storage and sent for processing when you start.</Text>
-        <input type="file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Upload images for background removal" disabled={running||busy} onChange={upload}/>
-        <Text as="p" tone="subdued">JPG, PNG or WebP · 3 MB per image · {items.length}/20 selected</Text>
-        <details><summary>Select Shopify product images</summary><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:16,marginTop:16,maxHeight:400,overflow:'auto'}}>
-          {products.flatMap(product=>product.images.map(image=><div key={product.id+image.id}><img src={image.url} alt={product.title} style={{width:'100%',height:100,objectFit:'contain'}}/><Checkbox label={product.title} checked={items.some(i=>i.id===product.id+image.id)} disabled={running||busy} onChange={checked=>select(product,image,checked)}/></div>))}
-        </div></details>
+        <div className={`bulk-upload ${dragging ? 'is-dragging' : ''} ${running||busy ? 'is-disabled' : ''}`}
+          onDragOver={event=>{event.preventDefault();if(!running&&!busy)setDragging(true);}}
+          onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDragging(false);}}
+          onDrop={event=>{event.preventDefault();setDragging(false);addFiles(Array.from(event.dataTransfer.files));}}>
+          <input ref={fileInput} className="bulk-file-input" type="file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Upload images for background removal" disabled={running||busy} onChange={upload}/>
+          <div className="bulk-upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 16V4m-4 4 4-4 4 4M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></div>
+          <h3>Drop your product photos here</h3>
+          <p>Clean backgrounds start with a simple upload.</p>
+          <Button disabled={running||busy} onClick={()=>fileInput.current?.click()}>Choose images</Button>
+          <span className="bulk-file-hint">JPG, PNG or WebP · Up to 3 MB each · 20 images per batch</span>
+        </div>
+        <div className="bulk-source-divider"><span>or choose from your store</span></div>
+        <section className="bulk-library">
+          <button className="bulk-library-toggle" type="button" aria-expanded={libraryOpen} aria-controls="bulk-product-library" onClick={()=>setLibraryOpen(v=>!v)}>
+            <span className="bulk-library-symbol" aria-hidden="true">▦</span>
+            <span className="bulk-library-heading"><strong>Shopify product images</strong><span>Browse your products and select the photos to edit</span></span>
+            <span className="bulk-selected-count">{items.filter(i=>!i.file).length} selected</span>
+            <span className={`bulk-chevron ${libraryOpen?'is-open':''}`} aria-hidden="true">⌄</span>
+          </button>
+          {libraryOpen&&<div id="bulk-product-library" className="bulk-library-body">
+            <label className="bulk-search"><span>Search products</span><input type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search by product name…"/></label>
+            <div className="bulk-product-grid">
+              {products.filter(product=>product.title.toLowerCase().includes(search.toLowerCase())).flatMap(product=>product.images.map(image=>{
+                const selected=items.some(i=>i.id===product.id+image.id);
+                return <label className={`bulk-product ${selected?'is-selected':''}`} key={product.id+image.id}>
+                  <input type="checkbox" aria-label={product.title} checked={selected} disabled={running||busy||(!selected&&items.length>=20)} onChange={event=>select(product,image,event.target.checked)}/>
+                  <span className="bulk-product-photo"><img src={image.url} alt="" loading="lazy"/></span>
+                  <span className="bulk-product-name">{product.title}</span>
+                </label>;
+              }))}
+            </div>
+            {!products.some(product=>product.title.toLowerCase().includes(search.toLowerCase())&&product.images.length>0)&&<p className="bulk-empty">No product images found. Try another search or upload images above.</p>}
+          </div>}
+        </section>
+        <div className="bulk-batch-summary"><strong>{items.length} / 20 images selected</strong><span>Original product images stay unchanged</span></div>
         <InlineStack gap="200"><Button variant="primary" disabled={running||busy||!items.some(i=>i.status==='pending')} onClick={()=>setRunning(true)}>Remove backgrounds</Button>
         {running && <Button onClick={()=>setRunning(false)}>Stop after current image</Button>}
         {!running&&!busy&&items.length>0&&<Button onClick={()=>{setItems([]);previews.current.forEach(URL.revokeObjectURL);previews.current=[];}}>Clear batch</Button>}
@@ -557,6 +600,7 @@ export default function BulkBackground() {
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:16}}>
       {items.map(item=><Card key={item.id}><BlockStack gap="300"><Text as="h3" variant="headingSm">{item.name}</Text><Badge tone={item.status==='done'?'success':item.status==='failed'?'critical':'info'}>{item.status}</Badge>
         {item.status==='done'?<Result item={item} products={products}/>:<img src={item.preview} alt={item.name} style={{width:'100%',height:160,objectFit:'contain'}}/>}
+        {!running&&!busy&&item.status==='pending'&&<Button onClick={()=>setItems(list=>list.filter(i=>i.id!==item.id))}>Remove from batch</Button>}
         {item.status==='failed'&&<><Banner tone="critical">{item.error}</Banner><Button disabled={running||busy} onClick={()=>setItems(list=>list.map(i=>i.id===item.id?{...i,status:'pending'}:i))}>Retry this image</Button></>}
       </BlockStack></Card>)}
       </div>
