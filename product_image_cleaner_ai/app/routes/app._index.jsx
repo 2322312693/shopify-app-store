@@ -1,3 +1,4 @@
+import { planFromSubscription, selectActiveSubscription } from "../services/subscription-policy";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import {
@@ -34,8 +35,8 @@ import {
   syncSubscriptionToBackend,
 } from "../services/usage.server";
 
-const isBillingTest = process.env.SHOPIFY_BILLING_TEST !== "false";
-const isBillingCheckEnabled = process.env.SHOPIFY_BILLING_CHECK_ENABLED === "true";
+const isBillingTest = process.env.SHOPIFY_BILLING_TEST === "true";
+const isBillingCheckEnabled = process.env.NODE_ENV === "production" || process.env.SHOPIFY_BILLING_CHECK_ENABLED !== "false";
 const showDiagnostics = process.env.SHOPIFY_DEBUG_PANEL === "true";
 const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
 const BILLING_UNAVAILABLE_MESSAGE =
@@ -50,6 +51,7 @@ const ACTIVE_SUBSCRIPTIONS_QUERY = `#graphql
   query ActiveAppSubscriptions {
     currentAppInstallation {
       activeSubscriptions {
+        id
         name
         status
         test
@@ -99,26 +101,6 @@ function isBillingForbidden(error) {
   return message.includes("403") || message.includes("Forbidden");
 }
 
-function normalizePlanKey(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function planFromSubscription(subscription) {
-  const normalizedName = normalizePlanKey(subscription?.name);
-  const paidPlans = Object.keys(PLAN_LIMITS).filter((planName) => planName !== "Free");
-  const byName = paidPlans.find((planName) =>
-    normalizePlanKey(planName) === normalizedName || normalizedName.includes(normalizePlanKey(planName)),
-  );
-  if (byName) return byName;
-
-  const amount = Number(subscription?.lineItems?.[0]?.plan?.pricingDetails?.price?.amount);
-  if (Math.abs(amount - 9.99) < 0.01) return "Starter";
-  if (Math.abs(amount - 29.99) < 0.01) return "Pro";
-  if (Math.abs(amount - 79.99) < 0.01) return "Business";
-
-  return null;
-}
-
 async function getActiveManagedSubscriptions(admin) {
   const response = await admin.graphql(ACTIVE_SUBSCRIPTIONS_QUERY);
   const json = await response.json();
@@ -128,28 +110,6 @@ async function getActiveManagedSubscriptions(admin) {
   }
 
   return json.data?.currentAppInstallation?.activeSubscriptions || [];
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function getManagedPlanWithRetry(admin, attempts = 3) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      const activeSubscriptions = await getActiveManagedSubscriptions(admin);
-      const managedPlan = activeSubscriptions.map(planFromSubscription).find(Boolean);
-      if (managedPlan) return managedPlan;
-    } catch (error) {
-      console.error("Managed Pricing subscription lookup failed", error);
-    }
-
-    if (attempt < attempts - 1) {
-      await sleep(500);
-    }
-  }
-
-  return null;
 }
 
 async function checkBillingSafely({ billing }) {
@@ -178,33 +138,14 @@ async function getCurrentPlan({ admin, billing, billingCheck }) {
     return BILLING_PLANS.includes(devPlan) ? devPlan : "Free";
   }
 
-  const check = billingCheck || await checkBillingSafely({ billing });
-  if (!check.ok) return "Free";
-
-  const activePlan = check.result?.appSubscriptions?.find((subscription) => planFromSubscription(subscription));
-  if (activePlan) return planFromSubscription(activePlan);
-
-  const managedPlan = await getManagedPlanWithRetry(admin);
-  if (managedPlan) return managedPlan;
-
-  return "Free";
+  const subscriptions = await getActiveManagedSubscriptions(admin);
+  const active = selectActiveSubscription(subscriptions, isBillingTest);
+  return active ? planFromSubscription(active) : "Free";
 }
 
-async function getCurrentSubscription({ admin, billing, planName, billingCheck }) {
+async function getCurrentSubscription({ admin, planName }) {
   if (!isBillingCheckEnabled || planName === "Free") return null;
-  const check = billingCheck || await checkBillingSafely({ billing });
-  if (check.ok) {
-    const billingSubscription = check.result?.appSubscriptions?.find((subscription) => planFromSubscription(subscription) === planName);
-    if (billingSubscription) return billingSubscription;
-  }
-
-  try {
-    const activeSubscriptions = await getActiveManagedSubscriptions(admin);
-    return activeSubscriptions.find((subscription) => planFromSubscription(subscription) === planName) || null;
-  } catch (error) {
-    console.error("Managed Pricing subscription lookup failed", error);
-    return null;
-  }
+  return selectActiveSubscription(await getActiveManagedSubscriptions(admin), isBillingTest);
 }
 
 function getStoreHandle(shop) {
@@ -286,6 +227,8 @@ export const loader = async ({ request }) => {
     if (isBillingCheckEnabled) {
       syncedUsage = await syncSubscriptionToBackend(session.shop, planName, {
         status: planName === "Free" ? "none" : "active",
+        id: activeSubscription?.id,
+        test: activeSubscription?.test,
         currentPeriodEnd: activeSubscription?.currentPeriodEnd,
         cancelAtPeriodEnd: activeSubscription?.cancelAtPeriodEnd,
       });

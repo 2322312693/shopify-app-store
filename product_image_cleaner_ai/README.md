@@ -9,7 +9,7 @@ Shopify embedded app for cleaning authorized product images with AI. It removes 
 - Calls the existing ZestGPT Replicate proxy with `google/nano-banana`.
 - Shows a before/after preview.
 - Adds the generated result as a new product image without replacing the original.
-- Requires a Shopify monthly subscription before use.
+- Includes 5 lifetime free images; paid quotas require an active Shopify subscription.
 
 ## Local development
 
@@ -62,3 +62,17 @@ git push -u origin main
 - Do not market this as removing arbitrary watermarks.
 - Use language such as "authorized product images", "old logos", "supplier labels", and "outdated promotional text".
 - Record the review screencast from a test store showing install, subscription, product selection, image generation, and adding the result back to the product.
+
+## Subscription synchronization (2026-09-06)
+
+- Production always checks Shopify before generating, regardless of development bypass settings.
+- `SHOPIFY_BILLING_TEST=false` excludes test subscriptions from paid access; explicitly enable only for testing.
+- Subscription approval is an entitlement, not evidence of a collected payment.
+- Uninstall revokes backend subscription state before deleting sessions.
+- Subscription webhooks query the current installation to handle out-of-order plan changes.
+- Backend synchronization errors return a failure so Shopify can retry.
+- Deploy the matching node-server and admin changes along with this service.
+- Render free instances sleep and have ephemeral filesystems. The SQLite session file
+  must be on persistent storage for sessions to survive restarts and deployments.
+
+Validation: `node --test tests/subscriptions.test.mjs`, `npm run typecheck`, `npm run build`.

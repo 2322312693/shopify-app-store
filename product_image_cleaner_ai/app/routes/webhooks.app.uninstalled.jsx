@@ -1,9 +1,14 @@
 import { authenticate, sessionStorage } from "../shopify.server";
 
+import { syncSubscriptionToBackend } from "../services/usage.server";
+
 export const action = async ({ request }) => {
   const { shop, session, topic } = await authenticate.webhook(request);
 
   console.log(`Received ${topic} webhook for ${shop}`);
+
+  // Persist revocation before acknowledging delivery or removing sessions.
+  await syncSubscriptionToBackend(shop, "Free", { status: "cancelled" });
 
   if (session) {
     await sessionStorage.deleteSession(session.id);

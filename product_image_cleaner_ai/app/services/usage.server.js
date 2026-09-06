@@ -116,6 +116,8 @@ export async function syncSubscriptionToBackend(shop, planName, subscription = {
     body: {
       shop,
       planName,
+      subscriptionId: subscription.id,
+      test: subscription.test === true,
       status: subscription.status || (planName === "Free" ? "none" : "active"),
       currentPeriodEnd: subscription.currentPeriodEnd,
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
