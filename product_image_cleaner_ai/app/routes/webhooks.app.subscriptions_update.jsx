@@ -1,3 +1,4 @@
+import { queryAdminWithRecovery } from "../services/admin-query.server";
 import { planFromSubscription } from "../services/subscription-policy";
 import { authenticate, unauthenticated } from "../shopify.server";
 import { syncSubscriptionToBackend } from "../services/usage.server";
@@ -11,15 +12,14 @@ export const action = async ({ request }) => {
   let subscription = getSubscriptionPayload(payload);
   // Webhooks can arrive out of order during plan changes. Reconcile the current
   // installation instead of applying an old cancellation to a new subscription.
-  const { admin } = await unauthenticated.admin(shop);
-  const response = await admin.graphql(`#graphql
+  const { admin, session } = await unauthenticated.admin(shop);
+  const result = await queryAdminWithRecovery({ admin, session, query: `#graphql
     query CurrentSubscriptionForWebhook {
       currentAppInstallation {
         activeSubscriptions { id name status test currentPeriodEnd }
       }
     }
-  `);
-  const result = await response.json();
+  ` });
   if (result.errors) throw new Error('Unable to reconcile Shopify subscription');
   const current = result.data?.currentAppInstallation;
   if (!current) throw new Error('Shopify installation missing in subscription query');

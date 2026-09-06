@@ -1,3 +1,4 @@
+import { queryAdminWithRecovery } from "../services/admin-query.server";
 import { planFromSubscription, selectActiveSubscription } from "../services/subscription-policy";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
@@ -101,9 +102,8 @@ function isBillingForbidden(error) {
   return message.includes("403") || message.includes("Forbidden");
 }
 
-async function getActiveManagedSubscriptions(admin) {
-  const response = await admin.graphql(ACTIVE_SUBSCRIPTIONS_QUERY);
-  const json = await response.json();
+async function getActiveManagedSubscriptions(admin, session) {
+  const json = await queryAdminWithRecovery({ admin, session, query: ACTIVE_SUBSCRIPTIONS_QUERY });
 
   if (json.errors) {
     throw new Error(json.errors.map((error) => error.message || JSON.stringify(error)).join("; "));
@@ -132,20 +132,20 @@ async function checkBillingSafely({ billing }) {
   }
 }
 
-async function getCurrentPlan({ admin, billing, billingCheck }) {
+async function getCurrentPlan({ admin, session, billing, billingCheck }) {
   if (!isBillingCheckEnabled) {
     const devPlan = process.env.SHOPIFY_DEV_PLAN || "Free";
     return BILLING_PLANS.includes(devPlan) ? devPlan : "Free";
   }
 
-  const subscriptions = await getActiveManagedSubscriptions(admin);
+  const subscriptions = await getActiveManagedSubscriptions(admin, session);
   const active = selectActiveSubscription(subscriptions, isBillingTest);
   return active ? planFromSubscription(active) : "Free";
 }
 
-async function getCurrentSubscription({ admin, planName }) {
+async function getCurrentSubscription({ admin, session, planName }) {
   if (!isBillingCheckEnabled || planName === "Free") return null;
-  return selectActiveSubscription(await getActiveManagedSubscriptions(admin), isBillingTest);
+  return selectActiveSubscription(await getActiveManagedSubscriptions(admin, session), isBillingTest);
 }
 
 function getStoreHandle(shop) {
@@ -207,8 +207,8 @@ export const loader = async ({ request }) => {
 
   let usageWarning = null;
   const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
-  const planName = await getCurrentPlan({ admin, billing, billingCheck });
-  const activeSubscription = await getCurrentSubscription({ admin, billing, planName, billingCheck });
+  const planName = await getCurrentPlan({ admin, session, billing, billingCheck });
+  const activeSubscription = await getCurrentSubscription({ admin, session, billing, planName, billingCheck });
   const billingWarning = billingCheck?.warning || null;
   let usage = fallbackUsage(planName);
   let productWarning = null;
@@ -387,7 +387,7 @@ export const action = async ({ request }) => {
       }
 
       const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
-      const planName = await getCurrentPlan({ admin, billing, billingCheck });
+      const planName = await getCurrentPlan({ admin, session, billing, billingCheck });
       const reservation = await reserveGeneration(session.shop, planName, {
         productId,
         sourceImageUrl,

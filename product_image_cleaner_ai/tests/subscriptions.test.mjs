@@ -21,6 +21,7 @@ function subscriptionAction(current, sync, payload = { status: 'CANCELLED', name
   return loadAction('webhooks.app.subscriptions_update.jsx', {
     authenticate: { webhook: async () => ({ shop: 'example.myshopify.com', payload }) },
     unauthenticated: { admin: async () => ({ admin: { graphql: async () => ({ json: async () => current }) } }) },
+    queryAdminWithRecovery: async ({ admin }) => (await admin.graphql()).json(),
     planFromSubscription, syncSubscriptionToBackend: sync,
   });
 }
@@ -47,4 +48,25 @@ test('uninstall persists revocation before deleting sessions', async () => {
   });
   await action({});
   assert.deepEqual(calls, ['cancelled', 'online', 'offline_example.myshopify.com']);
+});
+
+function recoveryQuery(fetch, migrateOfflineSessionToExpiring) {
+  const code = fs.readFileSync(new URL('../app/services/admin-query.server.js', import.meta.url), 'utf8')
+    .replace(/^import .*;\n/gm, '').replace('export async function', 'async function');
+  return new Function('fetch', 'migrateOfflineSessionToExpiring', code + '; return queryAdminWithRecovery;')(fetch, migrateOfflineSessionToExpiring);
+}
+test('SDK 403 recovers through direct query without granting unverified access', async () => {
+  const query = recoveryQuery(async () => ({ ok: true, json: async () => ({ data: 'verified' }) }), async () => assert.fail('unnecessary migration'));
+  const result = await query({ admin: { graphql: async () => { throw { status: 403 }; } }, session: { shop: 'test.myshopify.com', accessToken: 'old' }, query: 'query' });
+  assert.equal(result.data, 'verified');
+});
+test('invalid legacy token is migrated once and retry failure propagates', async () => {
+  let migrations = 0, requests = 0;
+  const query = recoveryQuery(async () => { requests++; return { ok: false, status: 403 }; }, async () => { migrations++; });
+  await assert.rejects(query({ admin: { graphql: async () => { throw { status: 403 }; } }, session: { shop: 'test.myshopify.com', accessToken: 'old' }, query: 'query' }));
+  assert.equal(migrations, 1); assert.equal(requests, 2);
+});
+test('server failures never trigger token migration', async () => {
+  const query = recoveryQuery(async () => assert.fail('unexpected fetch'), async () => assert.fail('unexpected migration'));
+  await assert.rejects(query({ admin: { graphql: async () => { throw { status: 500 }; } }, session: { accessToken: 'old' }, query: 'query' }));
 });
