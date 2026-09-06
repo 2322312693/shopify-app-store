@@ -46,9 +46,10 @@ function buildPrompt(mode, customRemovalTarget) {
   ].join(" ");
 }
 
-async function postJson(url, body) {
+async function postJson(url, body, timeoutMs = 15000) {
   const response = await fetch(url, {
     method: "POST",
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       "Content-Type": "application/json",
       Channel: "shopify",
@@ -86,12 +87,13 @@ export async function generateCleanProductImage({ imageUrl, cleanupMode, shop, c
     throw new Error("AI proxy did not return a job id");
   }
 
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  const deadline = Date.now() + 180000;
+  for (let attempt = 0; attempt < 60 && Date.now() < deadline; attempt += 1) {
     await sleep(3000);
 
     const prediction = await postJson(`${AI_API_BASE_URL}/replicate/get`, {
       id: jobId,
-    });
+    }, Math.max(1, Math.min(15000, deadline - Date.now())));
 
     if (prediction.status === "succeeded") {
       const outputUrl = getOutputUrl(prediction.output);

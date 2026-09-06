@@ -10,3 +10,7 @@ dist
 .data
 .agents
 skills-lock.json
+
+.vercel
+.env.*
+!.env.example

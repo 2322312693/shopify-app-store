@@ -1,3 +1,4 @@
+import { APP_CONFIG } from "../app-config";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { login, sessionStorage } from "../shopify.server";
@@ -15,7 +16,7 @@ export const loader = async ({ request }) => {
   }
 
   return json({
-    appName: "Product Image Cleaner AI",
+    appName: APP_CONFIG.name,
   });
 };
 

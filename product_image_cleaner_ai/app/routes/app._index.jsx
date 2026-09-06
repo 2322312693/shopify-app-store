@@ -1,3 +1,5 @@
+export const config = { maxDuration: 300 };
+import { APP_CONFIG } from "../app-config";
 import { syncMerchantProfileSafely } from "../services/merchant-profile.server";
 import { queryAdminWithRecovery } from "../services/admin-query.server";
 import { normalizePlanKey, planFromSubscription, selectActiveSubscription } from "../services/subscription-policy";
@@ -40,7 +42,7 @@ import {
 const isBillingTest = process.env.SHOPIFY_BILLING_TEST === "true";
 const isBillingCheckEnabled = process.env.NODE_ENV === "production" || process.env.SHOPIFY_BILLING_CHECK_ENABLED !== "false";
 const showDiagnostics = process.env.SHOPIFY_DEBUG_PANEL === "true";
-const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "product-image-cleaner-ai";
+const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || APP_CONFIG.handle;
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
 const CUSTOM_REMOVAL_MAX_LENGTH = 60;
@@ -492,7 +494,7 @@ export default function Index() {
 
   return (
     <Page
-      title="Product Image Cleaner AI"
+      title={APP_CONFIG.name}
       subtitle="Clean authorized product images and add the result back to Shopify."
       primaryAction={{
         content: "Open Shopify product",

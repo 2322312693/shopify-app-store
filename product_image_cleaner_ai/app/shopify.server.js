@@ -6,7 +6,8 @@ import {
   BillingInterval,
   shopifyApp,
 } from "@shopify/shopify-app-remix/server";
-import { SQLiteSessionStorage } from "@shopify/shopify-app-session-storage-sqlite";
+import { RemoteSessionStorage } from "./services/remote-session-storage.server";
+import { APP_CONFIG } from "./app-config";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -24,10 +25,20 @@ function appScopes() {
   return [...new Set([...envScopes, ...REQUIRED_SCOPES])];
 }
 
-const sessionDbPath = process.env.SHOPIFY_SESSION_DB_PATH || ".data/shopify_sessions.sqlite";
-const sessionDbDir = path.dirname(sessionDbPath);
-if (sessionDbDir && sessionDbDir !== ".") {
-  fs.mkdirSync(sessionDbDir, { recursive: true });
+const useRemoteSessions = process.env.SHOPIFY_SESSION_STORAGE === "remote" || process.env.VERCEL === "1";
+let storage;
+if (useRemoteSessions) {
+  storage = new RemoteSessionStorage({
+    baseUrl: process.env.SHOPIFY_USAGE_API_BASE_URL || process.env.AI_API_BASE_URL || "https://ai.zestgpt.com",
+    appKey: APP_CONFIG.key,
+    secret: process.env.SHOPIFY_INTERNAL_API_KEY,
+    encryptionSecret: process.env.SHOPIFY_API_SECRET,
+  });
+} else {
+  const sessionDbPath = process.env.SHOPIFY_SESSION_DB_PATH || ".data/shopify_sessions.sqlite";
+  fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
+  const { SQLiteSessionStorage } = await import("@shopify/shopify-app-session-storage-sqlite");
+  storage = new SQLiteSessionStorage(sessionDbPath);
 }
 
 const shopify = shopifyApp({
@@ -37,7 +48,7 @@ const shopify = shopifyApp({
   scopes: appScopes(),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
-  sessionStorage: new SQLiteSessionStorage(sessionDbPath),
+  sessionStorage: storage,
   distribution: AppDistribution.AppStore,
   billing: {
     [STARTER_PLAN]: {

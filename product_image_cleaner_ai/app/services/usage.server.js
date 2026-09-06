@@ -1,3 +1,4 @@
+import { APP_CONFIG } from "../app-config";
 export const PLAN_LIMITS = {
   Free: { label: "Free", limit: 5, period: "lifetime", price: "$0", interval: "lifetime" },
   Starter: { label: "Starter", limit: 100, period: "month", price: "$9.99", interval: "every 30 days" },
@@ -5,7 +6,7 @@ export const PLAN_LIMITS = {
   Business: { label: "Business", limit: 2000, period: "month", price: "$79.99", interval: "every 30 days" },
 };
 
-const APP_KEY = "product_image_cleaner_ai";
+const APP_KEY = APP_CONFIG.key;
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
