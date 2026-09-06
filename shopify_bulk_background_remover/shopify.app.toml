@@ -2,7 +2,7 @@
 
 client_id = "c08743367160cefb0f67feebc439992f"
 name = "Bulk Background Remover"
-application_url = "https://bulk-background-remover.vercel.app"
+application_url = "https://bulk-background-remover-five.vercel.app"
 embedded = true
 
 [build]
@@ -29,5 +29,5 @@ scopes = "read_products,write_products"
 
 [auth]
 redirect_urls = [
-  "https://bulk-background-remover.vercel.app/auth/callback"
+  "https://bulk-background-remover-five.vercel.app/auth/callback"
 ]
