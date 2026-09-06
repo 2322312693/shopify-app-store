@@ -70,3 +70,18 @@ test('server failures never trigger token migration', async () => {
   const query = recoveryQuery(async () => assert.fail('unexpected fetch'), async () => assert.fail('unexpected migration'));
   await assert.rejects(query({ admin: { graphql: async () => { throw { status: 500 }; } }, session: { accessToken: 'old' }, query: 'query' }));
 });
+
+test('session storage preserves expiring offline token pairs', async () => {
+  const { SQLiteSessionStorage } = await import('@shopify/shopify-app-session-storage-sqlite');
+  const { Session } = await import('@shopify/shopify-api');
+  const storage = new SQLiteSessionStorage(':memory:');
+  const session = new Session({ id: 'offline_test.myshopify.com', shop: 'test.myshopify.com', state: '', isOnline: false });
+  session.accessToken = 'test-access'; session.refreshToken = 'test-refresh';
+  session.expires = new Date('2026-09-06T12:00:00Z');
+  session.refreshTokenExpires = new Date('2026-12-01T12:00:00Z');
+  await storage.storeSession(session);
+  const restored = await storage.loadSession(session.id);
+  assert.equal(restored.refreshToken, session.refreshToken);
+  assert.equal(restored.expires.getTime(), session.expires.getTime());
+  assert.equal(restored.refreshTokenExpires.getTime(), session.refreshTokenExpires.getTime());
+});

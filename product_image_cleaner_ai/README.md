@@ -76,3 +76,5 @@ git push -u origin main
   must be on persistent storage for sessions to survive restarts and deployments.
 
 Validation: `node --test tests/subscriptions.test.mjs`, `npm run typecheck`, `npm run build`.
+
+Authentication uses expiring offline tokens with SDK refresh support. SQLite storage preserves both access and refresh tokens and their expiry times; use persistent storage for production webhooks. Node.js 20.10 or newer is required.

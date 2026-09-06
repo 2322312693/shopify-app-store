@@ -112,26 +112,6 @@ async function getActiveManagedSubscriptions(admin, session) {
   return json.data?.currentAppInstallation?.activeSubscriptions || [];
 }
 
-async function checkBillingSafely({ billing }) {
-  try {
-    return {
-      ok: true,
-      warning: null,
-      result: await billing.check({
-        plans: BILLING_PLANS,
-        isTest: isBillingTest,
-      }),
-    };
-  } catch (error) {
-    if (isBillingForbidden(error)) {
-      console.warn("Billing check forbidden; using backend/free quota state instead.");
-      return { ok: false, warning: BILLING_UNAVAILABLE_MESSAGE, result: null };
-    }
-    console.error("Billing check failed", error);
-    throw error;
-  }
-}
-
 async function getCurrentPlan({ admin, session, billing, billingCheck }) {
   if (!isBillingCheckEnabled) {
     const devPlan = process.env.SHOPIFY_DEV_PLAN || "Free";
@@ -206,7 +186,7 @@ export const loader = async ({ request }) => {
   const hasAccessToken = Boolean(session.accessToken);
 
   let usageWarning = null;
-  const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
+  const billingCheck = null;
   const planName = await getCurrentPlan({ admin, session, billing, billingCheck });
   const activeSubscription = await getCurrentSubscription({ admin, session, billing, planName, billingCheck });
   const billingWarning = billingCheck?.warning || null;
@@ -386,7 +366,7 @@ export const action = async ({ request }) => {
         }, { status: 400 });
       }
 
-      const billingCheck = isBillingCheckEnabled ? await checkBillingSafely({ billing }) : null;
+      const billingCheck = null;
       const planName = await getCurrentPlan({ admin, session, billing, billingCheck });
       const reservation = await reserveGeneration(session.shop, planName, {
         productId,

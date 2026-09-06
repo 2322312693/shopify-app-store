@@ -168,6 +168,13 @@ export async function migrateOfflineSessionToExpiring({ session }) {
     }));
   }
 
+  if (!data.access_token || !data.refresh_token) {
+    throw new Error("Shopify token migration returned an incomplete token pair.");
+  }
+  session.refreshToken = data.refresh_token;
+  if (data.refresh_token_expires_in) {
+    session.refreshTokenExpires = new Date(Date.now() + data.refresh_token_expires_in * 1000);
+  }
   session.accessToken = data.access_token;
   session.scope = data.scope || session.scope;
   if (data.expires_in) {
