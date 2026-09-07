@@ -23,7 +23,7 @@ for (const app of apps) {
     assert.equal(build.basename, app.path || '/');
     const index = build.routes['routes/_index'].module;
     const response = await index.loader({ request: new Request(`https://imagecleaner.zestgpt.com${app.path}/?shop=test.myshopify.com&host=kept`) });
-    assert.equal(response.headers.get('location'), `${app.path}/app?shop=test.myshopify.com&host=kept`);
+    assert.equal(response.headers.get('location'), '/app?shop=test.myshopify.com&host=kept');
     const root = await build.routes.root.module.loader();
     const expectedKey = ['legacy', 'product_image_cleaner_ai'].includes(app.id) ? 'legacy-key' : `${app.id}-key`;
     assert.equal((await root.json()).apiKey, expectedKey);
@@ -36,6 +36,8 @@ for (const app of apps) {
     const server = createServer((req,res) => handler(req,res).catch(error => { res.statusCode=500; res.end(error.message); }));
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
+      const entry = await fetch(`http://127.0.0.1:${server.address().port}${app.path}/?shop=test.myshopify.com&host=kept`, {redirect:'manual'});
+      assert.equal(entry.headers.get('location'), `${app.path}/app?shop=test.myshopify.com&host=kept`);
       const response = await fetch(`http://127.0.0.1:${server.address().port}${app.path}/auth/login`);
       const html = await response.text();
       assert.equal(response.status, 200, html.slice(0,200));
