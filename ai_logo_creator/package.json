@@ -42,7 +42,7 @@
     "@vercel/remix": {
       "@remix-run/dev": "$@remix-run/dev",
       "@remix-run/node": "$@remix-run/node",
-      "@remix-run/server-runtime": "2.17.4"
+      "@remix-run/server-runtime": "2.17.5"
     }
   }
 }

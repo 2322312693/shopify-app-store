@@ -13,15 +13,15 @@ api_version = "2026-07"
 
 [[webhooks.subscriptions]]
 topics = ["app/uninstalled"]
-uri = "/ai_logo_creator/webhooks/app/uninstalled"
+uri = "https://imagecleaner.zestgpt.com/ai_logo_creator/webhooks/app/uninstalled"
 
 [[webhooks.subscriptions]]
 topics = ["app_subscriptions/update"]
-uri = "/ai_logo_creator/webhooks/app/subscriptions_update"
+uri = "https://imagecleaner.zestgpt.com/ai_logo_creator/webhooks/app/subscriptions_update"
 
 [[webhooks.subscriptions]]
 compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
-uri = "/ai_logo_creator/webhooks/compliance"
+uri = "https://imagecleaner.zestgpt.com/ai_logo_creator/webhooks/compliance"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
