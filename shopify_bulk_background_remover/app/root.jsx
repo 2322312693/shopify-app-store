@@ -1,3 +1,4 @@
+import { appEnv } from "./services/app-env.server";
 import { json } from "@remix-run/node";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData } from "@remix-run/react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
@@ -5,7 +6,7 @@ import appStyles from "./styles/app.css?url";
 
 export const loader = async () => {
   return json({
-    apiKey: process.env.SHOPIFY_API_KEY || "",
+    apiKey: appEnv("SHOPIFY_API_KEY") || "",
   }, {
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

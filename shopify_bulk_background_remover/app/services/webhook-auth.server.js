@@ -1,10 +1,11 @@
+import { appEnv } from "./app-env.server.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 // Uninstall and privacy events must still authenticate after a shop's API
 // access token has been revoked; they do not need an Admin API session.
 export async function authenticateLifecycleWebhook(request) {
   if (request.method !== "POST") throw new Response(null, { status: 405 });
-  const secret = process.env.SHOPIFY_API_SECRET;
+  const secret = appEnv("SHOPIFY_API_SECRET");
   if (!secret) throw new Response(null, { status: 500 });
   const body = await request.text();
   const supplied = Buffer.from(request.headers.get("x-shopify-hmac-sha256") || "", "base64");

@@ -1,3 +1,4 @@
+import { appEnv } from "./services/app-env.server";
 import "@shopify/shopify-app-remix/adapters/node";
 
 import {
@@ -32,7 +33,7 @@ if (useRemoteSessions) {
     baseUrl: process.env.SHOPIFY_USAGE_API_BASE_URL || process.env.AI_API_BASE_URL || "https://ai.zestgpt.com",
     appKey: APP_CONFIG.key,
     secret: process.env.SHOPIFY_INTERNAL_API_KEY,
-    encryptionSecret: process.env.SHOPIFY_API_SECRET,
+    encryptionSecret: appEnv("SHOPIFY_API_SECRET"),
   });
 } else {
   const sessionDbPath = process.env.SHOPIFY_SESSION_DB_PATH || ".data/shopify_sessions.sqlite";
@@ -42,12 +43,12 @@ if (useRemoteSessions) {
 }
 
 const shopify = shopifyApp({
-  apiKey: process.env.SHOPIFY_API_KEY || "",
-  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+  apiKey: appEnv("SHOPIFY_API_KEY") || "",
+  apiSecretKey: appEnv("SHOPIFY_API_SECRET") || "",
   apiVersion: ApiVersion.October25,
   scopes: appScopes(),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
-  authPathPrefix: "/auth",
+  appUrl: appEnv("SHOPIFY_APP_URL") || "",
+  authPathPrefix: `${import.meta.env.BASE_URL.replace(/\/$/, "")}/auth`,
   sessionStorage: storage,
   distribution: AppDistribution.AppStore,
   billing: {

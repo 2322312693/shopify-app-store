@@ -1,0 +1,6 @@
+[
+  { "id": "legacy", "directory": "product_image_cleaner_ai", "path": "" },
+  { "id": "product_image_cleaner_ai", "directory": "product_image_cleaner_ai", "path": "/product_image_cleaner_ai" },
+  { "id": "bulk_background_remover", "directory": "shopify_bulk_background_remover", "path": "/bulk_background_remover" },
+  { "id": "ai_logo_creator", "directory": "ai_logo_creator", "path": "/ai_logo_creator" }
+]

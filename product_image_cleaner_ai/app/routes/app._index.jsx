@@ -1,3 +1,4 @@
+import { appEnv } from "../services/app-env.server";
 export const config = { maxDuration: 300 };
 import { APP_CONFIG } from "../app-config";
 import { syncMerchantProfileSafely } from "../services/merchant-profile.server";
@@ -42,7 +43,7 @@ import {
 const isBillingTest = process.env.SHOPIFY_BILLING_TEST === "true";
 const isBillingCheckEnabled = process.env.NODE_ENV === "production" || process.env.SHOPIFY_BILLING_CHECK_ENABLED !== "false";
 const showDiagnostics = process.env.SHOPIFY_DEBUG_PANEL === "true";
-const managedPricingAppHandle = process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || APP_CONFIG.handle;
+const managedPricingAppHandle = appEnv("SHOPIFY_MANAGED_PRICING_APP_HANDLE") || APP_CONFIG.handle;
 const BILLING_UNAVAILABLE_MESSAGE =
   "Shopify Billing API is currently unavailable for this app/store. Core image cleaning still works on the Free quota.";
 const CUSTOM_REMOVAL_MAX_LENGTH = 60;
@@ -185,7 +186,7 @@ export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
   const missingProductScopes = getMissingProductScopes(session);
   const url = new URL(request.url);
-  const reauthorizeUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
+  const reauthorizeUrl = `${import.meta.env.BASE_URL}auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
   const hasAccessToken = Boolean(session.accessToken);
 
   let usageWarning = null;

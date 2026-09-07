@@ -1,3 +1,4 @@
+import { appEnv } from "./app-env.server";
 import { sessionStorage } from "../shopify.server";
 
 const PRODUCTS_QUERY = `#graphql
@@ -138,8 +139,8 @@ export async function migrateOfflineSessionToExpiring({ session }) {
   }
 
   const body = new URLSearchParams({
-    client_id: process.env.SHOPIFY_API_KEY || "",
-    client_secret: process.env.SHOPIFY_API_SECRET || "",
+    client_id: appEnv("SHOPIFY_API_KEY") || "",
+    client_secret: appEnv("SHOPIFY_API_SECRET") || "",
     grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
     subject_token: session.accessToken,
     subject_token_type: "urn:shopify:params:oauth:token-type:offline-access-token",

@@ -1,0 +1,35 @@
+{
+  "app_name": "Zest AI Logo Creator",
+  "app_card_subtitle": "Create original logo concepts from a brand brief",
+  "app_introduction": "Turn a brand brief into an original logo. Download it or add it to a product.",
+  "app_details": "Create original logo concepts for products, collections, and campaigns. Enter a brand name and creative direction, then generate a square logo inside Shopify admin. Optionally upload a JPG, PNG, or WebP reference to guide a substantially redesigned concept. Preview and download the result, or add it as a new product image while preserving existing media.",
+  "feature_list": [
+    "Generate logo concepts from a brand name and creative brief",
+    "Guide a redesign with an optional reference image",
+    "Download results or add them as new product images",
+    "Preserve existing product media when saving a logo"
+  ],
+  "search_terms": [
+    "logo maker",
+    "AI logo",
+    "brand logo",
+    "logo design",
+    "product branding"
+  ],
+  "category": "Store design",
+  "subcategory": "Images and media",
+  "support_email": "2322312693a@gmail.com",
+  "support_url": "https://www.zestgpt.com/contact",
+  "privacy_url_planned": "https://imagecleaner.zestgpt.com/ai_logo_creator/privacy",
+  "pricing": [
+    { "name": "Free", "price": "Free", "quota": "1 logo total" },
+    { "name": "Starter", "price": "$6.99/month", "quota": "50 logos/month" },
+    { "name": "Pro", "price": "$12.99/month", "quota": "150 logos/month" },
+    { "name": "Business", "price": "$19.99/month", "quota": "500 logos/month" }
+  ],
+  "assets": {
+    "app_icon": "assets/app-icon-1200x1200.jpg",
+    "feature_media": "assets/feature-1600x900.jpg",
+    "feature_media_alt": "An AI logo brief flowing into several original geometric logo concepts"
+  }
+}

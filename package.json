@@ -1,0 +1,8 @@
+{
+  "name": "zest-shopify-platform",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node scripts/build-platform.mjs", "test": "node --test tests/platform.test.mjs" },
+  "devDependencies": { "@vercel/nft": "^0.30.4" },
+  "engines": { "node": "24.x" }
+}

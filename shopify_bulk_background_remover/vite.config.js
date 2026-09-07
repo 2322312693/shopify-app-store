@@ -3,7 +3,8 @@ import { vercelPreset } from "@vercel/remix/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [remix({ presets: process.env.VERCEL ? [vercelPreset()] : [] })],
+  base: (process.env.APP_BASE_PATH || "") + "/",
+  plugins: [remix({ basename: process.env.APP_BASE_PATH || "/", presets: process.env.VERCEL ? [vercelPreset()] : [] })],
   build: { target: "es2022" },
   server: {
     port: Number(process.env.PORT || 3000),
