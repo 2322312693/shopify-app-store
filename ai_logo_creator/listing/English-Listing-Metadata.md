@@ -92,13 +92,19 @@ An AI logo brief flowing into several original geometric logo concepts
 
 Create an original logo from a brand name, creative direction, and optional reference image
 
+File: `assets/screenshots/01-create-logo-1600x900.png`
+
 ## App screenshot 2 alt text
 
 Review and download a generated logo from the dedicated result page
 
+File: `assets/screenshots/02-logo-result-1600x900.png`
+
 ## App screenshot 3 alt text
 
 Select a Shopify product and add the generated logo as new product media
+
+File: `assets/screenshots/03-add-to-product-1600x900.png`
 
 ## Screencast URL
 
