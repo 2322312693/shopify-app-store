@@ -424,7 +424,7 @@ export const action = async ({ request }) => {
   }
 };
 
-function LogoResult({ data, products, brandName }) {
+function LogoResult({ data, products, brandName, onStartOver }) {
   const save = useFetcher();
   const [destination, setDestination] = useState(products[0]?.id || "");
   const [downloading, setDownloading] = useState(false);
@@ -449,7 +449,12 @@ function LogoResult({ data, products, brandName }) {
     }
   }
 
-  return <section className="logo-result" aria-labelledby="logo-result-heading">
+  return <section className="logo-result-page" aria-labelledby="logo-result-heading">
+    <div className="logo-result-nav">
+      <Button onClick={onStartOver}>← Back to logo creator</Button>
+      <span>Generation complete</span>
+    </div>
+    <section className="logo-result">
     <div className="logo-result-copy">
       <span className="logo-kicker">Your new concept</span>
       <h2 id="logo-result-heading">A logo ready for your next product</h2>
@@ -471,6 +476,7 @@ function LogoResult({ data, products, brandName }) {
       {save.data && <Banner tone={save.data.ok ? "success" : "critical"}>{save.data.ok ? "Logo added as a new product image." : save.data.error}</Banner>}
     </div>
     <div className="logo-result-frame"><img src={data.outputUrl} alt={`${brandName || "Generated"} logo concept`} /></div>
+    </section>
   </section>;
 }
 
@@ -486,10 +492,16 @@ export default function LogoCreator() {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [view, setView] = useState("create");
   const currentUsage = generator.data?.usage || usage;
   const busy = uploading || generator.state !== "idle";
 
   useEffect(() => () => { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); }, []);
+  useEffect(() => {
+    if (generator.data?.ok && generator.data.intent === "generate") {
+      setView("result");
+    }
+  }, [generator.data]);
 
   function chooseReference(file) {
     setError("");
@@ -519,6 +531,29 @@ export default function LogoCreator() {
     } finally {
       setUploading(false);
     }
+  }
+
+  function startOver() {
+    setError("");
+    setView("create");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (view === "result" && generator.data?.ok) {
+    return <Page title="Your logo result" subtitle="Download it or add it to a Shopify product.">
+      <BlockStack gap="400">
+        <InlineStack gap="200" align="space-between">
+          <Text as="p">{currentUsage ? `${currentUsage.used} / ${currentUsage.limit} logos used` : "Usage unavailable"}</Text>
+          <Button url={managedPricingUrl}>View plans / Manage subscription</Button>
+        </InlineStack>
+        <LogoResult
+          data={generator.data}
+          products={products}
+          brandName={generator.data.brandName}
+          onStartOver={startOver}
+        />
+      </BlockStack>
+    </Page>;
   }
 
   return <Page title="Zest AI Logo Creator" subtitle="Turn a brand brief into an original logo concept for your store.">
@@ -555,8 +590,6 @@ export default function LogoCreator() {
         </Card>
         <aside className="logo-brief-guide"><span className="logo-kicker">Brief recipe</span><h3>Three details are enough</h3><ol><li><strong>Symbol</strong><span>What should people recognize?</span></li><li><strong>Color</strong><span>Choose one dominant mood.</span></li><li><strong>Character</strong><span>Modern, playful, refined or bold.</span></li></ol><p>Reference images guide the direction. They are redesigned substantially rather than copied.</p></aside>
       </div>
-
-      {generator.data?.ok && <LogoResult data={generator.data} products={products} brandName={generator.data.brandName} />}
     </BlockStack>
   </Page>;
 }
