@@ -86,7 +86,7 @@ https://imagecleaner.zestgpt.com/ai_logo_creator/app
 
 ## Feature media alt text
 
-An AI logo brief flowing into several original geometric logo concepts
+A brand brief transformed into a downloadable logo ready for product media
 
 ## App screenshot 1 alt text
 
