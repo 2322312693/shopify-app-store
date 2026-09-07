@@ -4,10 +4,9 @@
   "app_introduction": "Turn a brand brief into an original logo. Download it or add it to a product.",
   "app_details": "Create original logo concepts for products, collections, and campaigns. Enter a brand name and creative direction, then generate a square logo inside Shopify admin. Optionally upload a JPG, PNG, or WebP reference to guide a substantially redesigned concept. Preview and download the result, or add it as a new product image while preserving existing media.",
   "feature_list": [
-    "Generate logo concepts from a brand name and creative brief",
-    "Guide a redesign with an optional reference image",
-    "Download results or add them as new product images",
-    "Preserve existing product media when saving a logo"
+    "Generate original logo concepts from brand briefs",
+    "Guide designs with optional reference images",
+    "Download results or add them to Shopify products"
   ],
   "search_terms": [
     "logo maker",
@@ -30,6 +29,20 @@
   "assets": {
     "app_icon": "assets/app-icon-1200x1200.jpg",
     "feature_media": "assets/feature-1600x900.jpg",
-    "feature_media_alt": "An AI logo brief flowing into several original geometric logo concepts"
+    "feature_media_alt": "An AI logo brief flowing into several original geometric logo concepts",
+    "screenshots": [
+      {
+        "file": "assets/screenshots/01-create-logo-1600x900.png",
+        "alt": "Create an original logo from a brand name, creative direction, and optional reference image"
+      },
+      {
+        "file": "assets/screenshots/02-logo-result-1600x900.png",
+        "alt": "Review and download a generated logo from the dedicated result page"
+      },
+      {
+        "file": "assets/screenshots/03-add-to-product-1600x900.png",
+        "alt": "Select a Shopify product and add the generated logo as new product media"
+      }
+    ]
   }
 }

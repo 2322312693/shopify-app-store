@@ -48,7 +48,7 @@ const shopify = shopifyApp({
   apiVersion: ApiVersion.October25,
   scopes: appScopes(),
   appUrl: appEnv("SHOPIFY_APP_URL") || "",
-  authPathPrefix: `${import.meta.env.BASE_URL.replace(/\/$/, "")}/auth`,
+  authPathPrefix: "/auth",
   sessionStorage: storage,
   distribution: AppDistribution.AppStore,
   billing: {

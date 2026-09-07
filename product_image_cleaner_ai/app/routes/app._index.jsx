@@ -186,7 +186,7 @@ export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
   const missingProductScopes = getMissingProductScopes(session);
   const url = new URL(request.url);
-  const reauthorizeUrl = `${import.meta.env.BASE_URL}auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
+  const reauthorizeUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
   const hasAccessToken = Boolean(session.accessToken);
 
   let usageWarning = null;

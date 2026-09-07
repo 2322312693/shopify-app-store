@@ -182,7 +182,7 @@ export const loader = async ({ request }) => {
   const { admin, billing, session } = await authenticate.admin(request);
   const missingProductScopes = getMissingProductScopes(session);
   const url = new URL(request.url);
-  const reauthorizeUrl = `${import.meta.env.BASE_URL}auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
+  const reauthorizeUrl = `/auth/login?shop=${encodeURIComponent(session.shop)}&host=${encodeURIComponent(url.searchParams.get("host") || "")}`;
   const hasAccessToken = Boolean(session.accessToken);
 
   let usageWarning = null;
@@ -544,7 +544,7 @@ export default function LogoCreator() {
       <BlockStack gap="400">
         <InlineStack gap="200" align="space-between">
           <Text as="p">{currentUsage ? `${currentUsage.used} / ${currentUsage.limit} logos used` : "Usage unavailable"}</Text>
-          <Button url={managedPricingUrl}>View plans / Manage subscription</Button>
+          <Button url={managedPricingUrl} target="_top">View plans / Manage subscription</Button>
         </InlineStack>
         <LogoResult
           data={generator.data}
@@ -564,7 +564,7 @@ export default function LogoCreator() {
       </div>
       <InlineStack gap="200" align="space-between">
         <Text as="p">{currentUsage ? `${currentUsage.used} / ${currentUsage.limit} logos used` : "Usage unavailable"}</Text>
-        <Button url={managedPricingUrl}>View plans / Manage subscription</Button>
+        <Button url={managedPricingUrl} target="_top">View plans / Manage subscription</Button>
       </InlineStack>
       {usageWarning && <Banner tone="warning">{usageWarning}</Banner>}
       {error && <Banner tone="critical">{error}</Banner>}
